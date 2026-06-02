@@ -1797,4 +1797,3 @@ function getClanByRank(rank) {
 
   return mapping[rank];
 }
-``
