@@ -611,6 +611,7 @@ filtered.forEach(d => {
   });
 };
 
+
 // ==============================
 // ▼▼▼ ページ2：ねこ海賊団 ▼▼▼
 // ==============================
@@ -1665,5 +1666,110 @@ window.drawChart3 = function () {
   });
 };
 // ==============================
-// 共通
+// 共通OCR
 // ==============================
+window.readImage = async function (mode) {
+
+  const inputId = mode === 1 ? "imageInput1" : "imageInput2";
+  const previewId = mode === 1 ? "ocrPreview1" : "ocrPreview2";
+
+  const file = document.getElementById(inputId).files[0];
+  if (!file) return alert("画像選択して");
+
+  document.getElementById(previewId).textContent = "読み取り中...";
+
+  const result = await Tesseract.recognize(
+    file,
+    "eng+jpn",
+    { logger: m => console.log(m) }
+  );
+
+  const text = result.data.text;
+
+  document.getElementById(previewId).textContent = text;
+
+  if (mode === 1) {
+    parseClanText(text);
+  } else {
+    parseRankText(text);
+  }
+};
+// 1ページ目OCR
+function parseClanText(text) {
+  const lines = text.split("\n");
+  const results = [];
+  lines.forEach(line => {
+    // 例：魔導特務隊 1234
+    const match = line.match(/(.+?)\s+(\d+)/);
+    if (match) {
+      let clan = match[1].trim();
+      const score = Number(match[2].replace(/\D/g, ""));
+      // ✅ クラン名補正
+      const clanMap = {
+        "魔導特務体": "魔導特務隊",
+        "ねこ海賊団": "ねこ海賊団"
+      };
+      clan = clanMap[clan] || clan;
+      if (clanSettings[clan]) {
+        results.push({ clan, score });
+      }
+    }
+  });
+  if (!results.length) return alert("クラン読み取り失敗");
+  if (!confirm(`${results.length}件登録する？`)) return;
+  autoRegisterClan(results);
+}
+
+async function autoRegisterClan(list) {
+  const date = new Date().toISOString().slice(0,10);
+  for (let d of list) {
+    await setDoc(doc(db, "scores", `${date}_${d.clan}`), {
+      clan: d.clan,
+      score: d.score * 1000,
+      date,
+      time: Date.now()
+    });
+  }
+  alert("✅ クラン自動登録完了！");
+}
+// 2ページ目OCR
+function parseRankText(text) {
+  const lines = text.split("\n");
+  const results = [];
+  lines.forEach(line => {
+    // 例：1 モジュ 1234
+    const match = line.match(/(\d+)[\.\s]+(.+?)\s+(\d+)/);
+    if (match) {
+      let member = match[2].trim();
+      // ✅ 名前補正
+      const nameMap = {
+        "モジユ": "モジュ"
+      };
+      member = nameMap[member] || member;
+      const score = Number(match[3].replace(/\D/g, ""));
+      results.push({
+        rank: Number(match[1]),
+        member,
+        score
+      });
+    }
+  });
+  if (!results.length) return alert("順位読み取り失敗");
+  if (!confirm(`${results.length}件登録する？`)) return;
+  autoRegisterRank(results);
+}
+
+async function autoRegisterRank(list) {
+  const date = new Date().toISOString().slice(0,10);
+  for (let d of list) {
+    await setDoc(doc(db, "ranks", `${date}_${d.member}`), {
+      clan: "ねこ海賊団",
+      member: d.member,
+      rank: d.rank,
+      score: d.score,
+      date,
+      time: Date.now()
+    });
+  }
+  alert("✅ 順位自動登録完了！");
+}
