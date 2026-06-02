@@ -1700,7 +1700,7 @@ window.readImage = async function () {
 
     ctxTop.drawImage(img, topX, topY, topW, topH, 0, 0, topW, topH);
 
-    const topResult = await Tesseract.recognize(canvasTop, "eng");
+    const topResult = await Tesseract.recognize(canvasTop, "eng+jpn");
 
     const topScores = extractScores(topResult.data.text);
 
@@ -1720,7 +1720,7 @@ window.readImage = async function () {
 
     ctxBottom.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-    const bottomResult = await Tesseract.recognize(canvasBottom, "eng");
+    const bottomResult = await Tesseract.recognize(canvasBottom, "eng+jpn");
 
     const bottomScores = extractScores(bottomResult.data.text);
 
