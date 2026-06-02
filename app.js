@@ -1669,31 +1669,53 @@ window.drawChart3 = function () {
 // 共通OCR
 // ==============================
 window.readImage = async function (mode) {
-
   const inputId = mode === 1 ? "imageInput1" : "imageInput2";
   const previewId = mode === 1 ? "ocrPreview1" : "ocrPreview2";
-
   const file = document.getElementById(inputId).files[0];
   if (!file) return alert("画像選択して");
-
   document.getElementById(previewId).textContent = "読み取り中...";
-
-  const result = await Tesseract.recognize(
-    file,
-    "eng+jpn",
-    { logger: m => console.log(m) }
+  // 画像前処理
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(
+    0,
+    0,
+    canvas.width,
+    canvas.height
   );
-
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray =
+      (data[i] + data[i + 1] + data[i + 2]) / 3;
+    const v = gray > 140 ? 255 : 0;
+    data[i] = v;
+    data[i + 1] = v;
+    data[i + 2] = v;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  // OCR
+  const result = await Tesseract.recognize(
+    canvas,
+    "eng+jpn",
+    {
+      logger: m => console.log(m)
+    }
+  );
   const text = result.data.text;
-
   document.getElementById(previewId).textContent = text;
-
   if (mode === 1) {
     parseClanText(text);
   } else {
     parseRankText(text);
   }
 };
+
 // 1ページ目OCR
 function parseClanText(text) {
 
