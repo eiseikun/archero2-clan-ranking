@@ -1691,12 +1691,12 @@ window.runOCR = async function () {
 
     const y = startY + i * rowHeight;
 
-    const crop = ctx.getImageData(
-      0,
-      y,
-      img.width,
-      rowHeight
-    );
+ const crop = ctx.getImageData(
+  img.width * 0.6,   // ←右側だけ
+  y,
+  img.width * 0.35, // ←幅も制限
+  rowHeight
+);
 
     const temp = document.createElement("canvas");
     temp.width = crop.width;
@@ -1727,6 +1727,7 @@ window.runOCR = async function () {
       "eng",
       {
         tessedit_char_whitelist: "0123456789.TB",
+        psm: 7
       }
     );
 
@@ -1734,7 +1735,7 @@ window.runOCR = async function () {
     // 🔥 解析（数字抽出）
     // ==========================
     const scoreMatch = text.match(/(\d+\.\d+)(T|B)/);
-    const rankMatch = text.match(/^\d+/);
+    const rank = i + 4;
 
     if (!scoreMatch) continue;
 
