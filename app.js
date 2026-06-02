@@ -1717,71 +1717,67 @@ window.readImage = async function (mode) {
 };
 
 // 1ページ目OCR
-function parseClanText(text) {
+function autoFixClanName(raw) {
 
-  console.log("OCR RAW:", text);
+  const input = normalizeText(raw);
+  const clans = Object.keys(clanSettings);
 
-  // ======================
-  // ✅ 数字だけ抽出
-  // ======================
-  const matches = text.match(/\d+\.\d+/g);
+  let bestMatch = raw;
+  let bestScore = 0;
 
-  if (!matches) {
-    alert("スコア検出できず");
-    return;
+  for (let clan of clans) {
+
+    const target = normalizeText(clan);
+
+    // ======================
+    // ✅ ① 部分一致スコア
+    // ======================
+    let common = 0;
+
+    for (let char of target) {
+      if (input.includes(char)) common++;
+    }
+
+    const score1 = common / target.length;
+
+    // ======================
+    // ✅ ② 文字位置一致（補助）
+    // ======================
+    let samePos = 0;
+
+    for (let i = 0; i < Math.min(input.length, target.length); i++) {
+      if (input[i] === target[i]) samePos++;
+    }
+
+    const score2 = samePos / target.length;
+
+    // ======================
+    // ✅ ③ 長さ補正
+    // ======================
+    const lengthScore =
+      Math.min(input.length, target.length) /
+      Math.max(input.length, target.length);
+
+    // ======================
+    // ✅ 合計スコア（重要）
+    // ======================
+    const total =
+      score1 * 0.6 +
+      score2 * 0.3 +
+      lengthScore * 0.1;
+
+    if (total > bestScore) {
+      bestScore = total;
+      bestMatch = clan;
+    }
   }
 
-  // ✅ 数値化（T → B）
-  let scores = matches.map(v => parseFloat(v) * 1000);
-
-  // ✅ 異常除去
-  scores = scores.filter(v =>
-    v > 5000 && v < 600000
-  );
-
-  // ✅ 重複排除＋降順
-  scores = [...new Set(scores)].sort((a,b)=>b-a);
-
-  console.log("スコア抽出:", scores);
-
-  if (scores.length < 7) {
-    alert("スコア不足（OCR精度不足）");
-    return;
+  // ✅ 閾値（かなり厳しめ）
+  if (bestScore > 0.6) {
+    return bestMatch;
   }
 
-  // ======================
-  // ✅ クラン固定順（超重要）
-  // ======================
-  const clans = [
-    "魔導特務隊",
-    "最狂会",
-    "IgnisFloris",
-    "ポケポケ会",
-    "PopoWarren",
-    "やまだ家",
-    "ねこ海賊団",
-    "たまねぎ班",
-    "アチャ伝",
-    "猫の旅"
-  ];
-
-  // ======================
-  // ✅ 上位から割当
-  // ======================
-  const results = clans.map((clan, i) => ({
-    clan,
-    score: scores[i]
-  }));
-
-  console.log("結果:", results);
-
-  const msg = results
-    .map(d => `${d.clan} : ${formatScore(d.score)}`)
-    .join("\n");
-
-  if (!confirm(msg)) return;
-
-  autoRegisterClan(results);
+  return raw;
 }
 
 
