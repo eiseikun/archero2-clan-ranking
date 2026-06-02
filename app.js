@@ -1718,45 +1718,72 @@ window.readImage = async function (mode) {
 
 // 1ページ目OCR
 function parseClanText(text) {
-  console.log(text);
-  // 🔥 OCR補正（強化）
-  let normalized = text
-    .replace(/\s/g, "")         // 空白削除
-    .replace(/農/g, "賊")
-    .replace(/ボ/g, "団")
-    .replace(/ご/g, "こ")
-    .replace(/体/g, "隊")
-    .replace(/r/g, "T")         // ← 超重要！
-    .replace(/t/g, "T");
-  const results = [];
-  const clanList = Object.keys(clanSettings);
-  clanList.forEach(clan => {
-    const simpleName = clan.replace(/[^\wぁ-んァ-ン一-龯]/g, "");
-    if (!normalized.includes(simpleName)) return;
-    const pos = normalized.indexOf(simpleName);
-    const area = normalized.substring(pos, pos + 300);
-    const match = area.match(/(\d+(?:\.\d+)?)(T|B)/);
-    if (!match) return;
-    let score = parseFloat(match[1]);
-    if (match[2] === "T") {
-      score *= 1000;
-    }
-    results.push({
-      clan,
-      score
-    });
-  });
-  console.log("抽出結果:", results);
-  if (!results.length) {
-    alert("クラン読み取り失敗（精度不足）");
+
+  console.log("OCR RAW:", text);
+
+  // ======================
+  // ✅ 数字だけ抽出
+  // ======================
+  const matches = text.match(/\d+\.\d+/g);
+
+  if (!matches) {
+    alert("スコア検出できず");
     return;
   }
+
+  // ✅ 数値化（T → B）
+  let scores = matches.map(v => parseFloat(v) * 1000);
+
+  // ✅ 異常除去
+  scores = scores.filter(v =>
+    v > 5000 && v < 600000
+  );
+
+  // ✅ 重複排除＋降順
+  scores = [...new Set(scores)].sort((a,b)=>b-a);
+
+  console.log("スコア抽出:", scores);
+
+  if (scores.length < 7) {
+    alert("スコア不足（OCR精度不足）");
+    return;
+  }
+
+  // ======================
+  // ✅ クラン固定順（超重要）
+  // ======================
+  const clans = [
+    "魔導特務隊",
+    "最狂会",
+    "IgnisFloris",
+    "ポケポケ会",
+    "PopoWarren",
+    "やまだ家",
+    "ねこ海賊団",
+    "たまねぎ班",
+    "アチャ伝",
+    "猫の旅"
+  ];
+
+  // ======================
+  // ✅ 上位から割当
+  // ======================
+  const results = clans.map((clan, i) => ({
+    clan,
+    score: scores[i]
+  }));
+
+  console.log("結果:", results);
+
   const msg = results
     .map(d => `${d.clan} : ${formatScore(d.score)}`)
     .join("\n");
-  if (!confirm(`以下を登録します\n\n${msg}`)) return;
+
+  if (!confirm(msg)) return;
+
   autoRegisterClan(results);
 }
+
 
 
 async function autoRegisterClan(list) {
