@@ -7,6 +7,7 @@
 
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 
@@ -51,6 +52,14 @@
   <div class="row">
     <button onclick="saveWeekdayBestImage()">📸 曜日別画像保存</button>
   </div>
+   <hr>
+<h3>📷 OCR自動取込</h3>
+
+<input type="file" id="ocrImage" accept="image/*">
+
+<div class="row">
+  <button onclick="runOCR()">画像から自動入力</button>
+</div>
 </div>
   
   
