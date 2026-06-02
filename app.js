@@ -1693,8 +1693,8 @@ window.runOCR = async function () {
   // ==========================
   const startY = baseHeight * 0.38;  // ←ここ超重要（初期位置）
   const rowGap = baseHeight * 0.078; // ←行間
-  const scoreX = baseWidth * 0.63;
-  const scoreW = baseWidth * 0.32;
+const scoreX = baseWidth * 0.52;
+const scoreW = baseWidth * 0.38;
   const scoreH = baseHeight * 0.055;
 
   for (let i = 0; i < 15; i++) {
