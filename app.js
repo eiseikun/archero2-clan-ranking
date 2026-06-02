@@ -1718,86 +1718,93 @@ window.readImage = async function (mode) {
 
 // 1ページ目OCR
 function parseClanText(text) {
+
   console.log("OCR raw:", text);
-  // 🔧 OCR補正
-  let normalized = text
-    .replace(/\s/g, "")
-    .replace(/農/g, "賊")
-    .replace(/ボ/g, "団")
-    .replace(/体/g, "隊")
-    .replace(/ご/g, "こ")
-    .replace(/r/g, "T")
-    .replace(/t/g, "T");
-  console.log("normalized:", normalized);
+
+  // ======================
+  // ✅ 行ベースで処理
+  // ======================
+  const lines = text.split("\n");
+
   const results = [];
-  const clanList = Object.keys(clanSettings);
-  // ✅ ① 上位3専用処理
-  clanList.forEach(clan => {
-    const simple = clan.replace(/\s/g, "");
-    const regex = new RegExp(
-      simple + "([0-9]+(?:\\.[0-9]+)?)(T|B)",
-      "i"
-    );
-    const match = normalized.match(regex);
-    if (match) {
-      let value = parseFloat(match[1]); // ✅そのまま
-      if (match[2] === "T") value *= 1000;
-      // 重複防止
-      if (!results.find(r => r.clan === clan)) {
+
+  for (let line of lines) {
+
+    // 🔥 ゴミ行除去
+    if (line.length < 5) continue;
+
+    // ======================
+    // ✅ クラン名補正
+    // ======================
+    let fixed = line
+      .replace(/\s/g, "")       // 空白除去
+      .replace(/ポケポケ会/g, "ポケポケ会")
+      .replace(/popowarren/gi, "PopoWarren")
+      .replace(/やまだ家/g, "やまだ家")
+      .replace(/ねこ海賊団/g, "ねこ海賊団")
+      .replace(/たまねぎ班/g, "たまねぎ班")
+      .replace(/アチャ伝/g, "アチャ伝")
+      .replace(/猫の旅/g, "猫の旅")
+      .replace(/最狂会/g, "最狂会")
+      .replace(/魔導特務隊/g, "魔導特務隊")
+      .replace(/IgnisFloris/g, "IgnisFloris");
+
+    // ======================
+    // ✅ スコア抽出
+    // ======================
+    const match = fixed.match(/(\d+(?:\.\d+))\s*(T|B|r|t)?/i);
+
+    if (!match) continue;
+
+    let value = parseFloat(match[1]); // ← ✅そのまま（絶対四捨五入しない）
+
+    let unit = match[2];
+
+    // ✅ OCR誤認識修正
+    if (unit === "r" || unit === "t") {
+      unit = "T";
+    }
+
+    if (unit === "T") {
+      value *= 1000;
+    }
+
+    // ======================
+    // ✅ クラン特定（完全一致）
+    // ======================
+    for (let clan of Object.keys(clanSettings)) {
+
+      if (fixed.includes(clan)) {
+
+        // 重複防止
+        if (results.find(r => r.clan === clan)) continue;
+
         results.push({
           clan,
           score: value
         });
+
       }
     }
-  });
-  // ✅ ② 全順位用処理（スコア起点）
-  const scoreMatches =
-    normalized.matchAll(/([0-9]+(?:\.[0-9]+)?)(T|B)?/g);
-  for (let match of scoreMatches) {
-    const rawValue = match[1];
-    let value = parseFloat(rawValue);
-    // ✅ 単位判定
-    if (match[2] === "T") {
-      value *= 1000;
-    } else if (match[2] === "B") {
-      // そのまま
-    } else {
-      // 🔥 単位欠け対策（今回の画像対応）
-      if (value > 5) {
-        value *= 1000; // T扱い
-      }
-    }
-    const pos = match.index;
-    const area = normalized.substring(
-      Math.max(0, pos - 200),
-      pos + 200
-    );
-    clanList.forEach(clan => {
-      const simple = clan.replace(/\s/g, "");
-      if (!area.includes(simple)) return;
-      if (results.find(r => r.clan === clan)) return;
-      results.push({
-        clan,
-        score: value
-      });
-    });
   }
-  // ✅ ソート（任意）
-  results.sort((a, b) => b.score - a.score);
-  console.log("最終結果:", results);
-  if (!results.length) {
-    alert("読み取り失敗（精度不足）");
+
+  console.log("結果:", results);
+
+  // ✅ データ不足チェック（重要）
+  if (results.length < 5) {
+    alert("読み取り精度が低い（スクショを拡大して再試行してください）");
     return;
   }
-  // ✅ 表示（小数そのまま）
+
+  // ✅ 確認表示
   const msg = results
     .map(d => `${d.clan} : ${formatScore(d.score)}`)
     .join("\n");
-  if (!confirm(`以下を登録します\n\n${msg}`)) return;
+
+  if (!confirm("登録内容\n\n" + msg)) return;
+
   autoRegisterClan(results);
 }
-
 
 
 async function autoRegisterClan(list) {
