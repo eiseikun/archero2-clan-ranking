@@ -1691,8 +1691,8 @@ window.runOCR = async function () {
   // ==========================
   // ✅ 完全固定座標
   // ==========================
-  const startY = baseHeight * 0.38;  // ←ここ超重要（初期位置）
-  const rowGap = baseHeight * 0.078; // ←行間
+  const startY = baseHeight * 0.36;
+const rowGap = baseHeight * 0.076;
 const scoreX = baseWidth * 0.52;
 const scoreW = baseWidth * 0.38;
   const scoreH = baseHeight * 0.055;
