@@ -1696,27 +1696,76 @@ window.readImage = async function (mode) {
 };
 // 1ページ目OCR
 function parseClanText(text) {
-  const lines = text.split("\n");
+
+  console.log(text);
+
+  // OCR補正
+  let normalized = text
+    .replace(/\s/g, "")
+    .replace(/農/g, "賊")
+    .replace(/ボ/g, "団")
+    .replace(/ご/g, "こ")
+    .replace(/体/g, "隊");
+
+  const targetClans = [
+    "魔導特務隊",
+    "最狂会",
+    "IgnisFloris",
+    "ポケポケ会",
+    "PopoWarren",
+    "やまだ家",
+    "ねこ海賊団",
+    "たまねぎ班",
+    "アチャ伝",
+    "猫の旅",
+    "天狼の戦弓団"
+  ];
+
   const results = [];
-  lines.forEach(line => {
-    // 例：魔導特務隊 1234
-    const match = line.match(/(.+?)\s+(\d+)/);
-    if (match) {
-      let clan = match[1].trim();
-      const score = Number(match[2].replace(/\D/g, ""));
-      // ✅ クラン名補正
-      const clanMap = {
-        "魔導特務体": "魔導特務隊",
-        "ねこ海賊団": "ねこ海賊団"
-      };
-      clan = clanMap[clan] || clan;
-      if (clanSettings[clan]) {
-        results.push({ clan, score });
-      }
+
+  targetClans.forEach(clan => {
+
+    const pos = normalized.indexOf(clan);
+
+    if (pos === -1) return;
+
+    // クラン名の後ろ150文字くらいを見る
+    const area = normalized.substring(pos, pos + 150);
+
+    const scoreMatch =
+      area.match(/(\d+(?:\.\d+)?)(T|B)/);
+
+    if (!scoreMatch) return;
+
+    let score =
+      parseFloat(scoreMatch[1]);
+
+    // FirestoreはB単位で保存しているので変換
+    if (scoreMatch[2] === "T") {
+      score *= 1000;
     }
+
+    results.push({
+      clan,
+      score
+    });
   });
-  if (!results.length) return alert("クラン読み取り失敗");
-  if (!confirm(`${results.length}件登録する？`)) return;
+
+  console.log(results);
+
+  if (!results.length) {
+    alert("クラン読み取り失敗");
+    return;
+  }
+
+  const msg = results
+    .map(d => `${d.clan} : ${formatScore(d.score)}`)
+    .join("\n");
+
+  if (!confirm(`以下を登録します\n\n${msg}`)) {
+    return;
+  }
+
   autoRegisterClan(results);
 }
 
@@ -1725,7 +1774,7 @@ async function autoRegisterClan(list) {
   for (let d of list) {
     await setDoc(doc(db, "scores", `${date}_${d.clan}`), {
       clan: d.clan,
-      score: d.score * 1000,
+      score: d.score,
       date,
       time: Date.now()
     });
