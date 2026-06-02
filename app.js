@@ -1664,3 +1664,137 @@ window.drawChart3 = function () {
     }
   });
 };
+window.runOCR = async function () {
+  const file = document.getElementById("ocrImage").files[0];
+  if (!file) return alert("画像選んで");
+
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await new Promise(r => img.onload = r);
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img, 0, 0);
+
+  // ==========================
+  // 🔥 行検出（固定レイアウト用）
+  // ==========================
+  const startY = Math.floor(img.height * 0.35); // 上3位スキップ
+  const rowHeight = Math.floor(img.height * 0.075);
+
+  const results = [];
+
+  for (let i = 0; i < 15; i++) {
+
+    const y = startY + i * rowHeight;
+
+    const crop = ctx.getImageData(
+      0,
+      y,
+      img.width,
+      rowHeight
+    );
+
+    const temp = document.createElement("canvas");
+    temp.width = crop.width;
+    temp.height = crop.height;
+
+    const tctx = temp.getContext("2d");
+    tctx.putImageData(crop, 0, 0);
+
+    // ==========================
+    // 🔥 前処理（超重要）
+    // ==========================
+    const imgData = tctx.getImageData(0, 0, temp.width, temp.height);
+    const data = imgData.data;
+
+    for (let j = 0; j < data.length; j += 4) {
+      const avg = (data[j] + data[j + 1] + data[j + 2]) / 3;
+      const v = avg > 140 ? 255 : 0;
+      data[j] = data[j + 1] = data[j + 2] = v;
+    }
+
+    tctx.putImageData(imgData, 0, 0);
+
+    // ==========================
+    // 🔥 OCR実行
+    // ==========================
+    const { data: { text } } = await Tesseract.recognize(
+      temp,
+      "eng",
+      {
+        tessedit_char_whitelist: "0123456789.TB",
+      }
+    );
+
+    // ==========================
+    // 🔥 解析（数字抽出）
+    // ==========================
+    const scoreMatch = text.match(/(\d+\.\d+)(T|B)/);
+    const rankMatch = text.match(/^\d+/);
+
+    if (!scoreMatch) continue;
+
+    let score = parseFloat(scoreMatch[1]);
+    const unit = scoreMatch[2];
+
+    // B → T換算
+    if (unit === "B") score = score / 1000;
+
+    const rank = rankMatch ? Number(rankMatch[0]) : i + 4;
+
+    results.push({
+      rank,
+      score
+    });
+
+  }
+
+  console.log("取得結果", results);
+
+  
+  // ==========================
+  // 🔥 Firestore自動登録
+  // ==========================
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const r of results) {
+
+    const clan = getClanByRank(r.rank);
+    if (!clan) continue;
+
+    const docId = `${today}_${clan}`;
+
+    await setDoc(doc(db, "scores", docId), {
+      clan,
+      score: r.score * 1000, // T→Bに戻す
+      date: today,
+      time: Date.now()
+    });
+  }
+
+  alert("OCR登録完了🔥");
+};
+
+function getClanByRank(rank) {
+
+  const mapping = {
+    1: "魔導特務隊",
+    2: "最狂会",
+    3: "IgnisFloris",
+    4: "ポケポケ会",
+    5: "PopoWarren",
+    6: "やまだ家",
+    7: "ねこ海賊団",
+    8: "たまねぎ班",
+    9: "アチャ伝",
+    10: "猫の旅",
+    11: "天狼の戦弓団",
+  };
+
+  return mapping[rank];
+}
+``
