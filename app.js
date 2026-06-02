@@ -5,9 +5,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, collection, onSnapshot, doc, setDoc,query, orderBy,getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCzbAnlP-XRNZe210GEYvEVFskayxjX9UI",
-  authDomain: "clan-ranking-661e3.firebaseapp.com",
-  projectId: "clan-ranking-661e3",
+  apiKey: "AIzaSyBCBvYwXTGGAGw40lrq0-QBLN_Bm8eqRL4",
+  authDomain: "clan-ranking2.firebaseapp.com",
+  projectId: "clan-ranking2",
 };
 
 const app = initializeApp(firebaseConfig);
