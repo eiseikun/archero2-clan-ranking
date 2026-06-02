@@ -1679,6 +1679,7 @@ window.runOCR = async function () {
   canvas.width = img.width;
   canvas.height = img.height;
 
+  
   // ✅ ここ重要（警告対策）
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(img, 0, 0);
@@ -1737,6 +1738,11 @@ window.runOCR = async function () {
 
     tctx.putImageData(imgData, 0, 0);
 
+    
+// ↓ここに追加！！！
+temp.style.border = "2px solid red";
+temp.style.margin = "4px";
+document.body.appendChild(temp);
     // ==========================
     // ✅ OCR
     // ==========================
