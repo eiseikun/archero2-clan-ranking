@@ -1,0 +1,305 @@
+/* ==============================
+■ ベース
+============================== */
+body{
+  font-family:sans-serif;
+  background:#0f172a;
+  color:#e5e7eb;
+  margin:0;
+}
+
+h1{
+  font-size:18px;
+  margin:0;
+}
+h3{
+  margin-top:0;
+  font-size:15px;
+}
+/* ==============================
+■ レイアウト
+============================== */
+.container{
+  max-width:420px;
+  margin:auto;
+  padding:14px;
+}
+
+.box{
+  background:#1e293b;
+  padding:14px;
+  margin-bottom:14px;
+  border-radius:14px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.3);
+}
+
+.row{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+/* ==============================
+■ UI（タブ）
+============================== */
+.tabs{
+  display:flex;
+  margin-bottom:10px;
+}
+
+.tabs button{
+  flex:1;
+  padding:10px;
+  background:#1e293b;
+  border:none;
+  color:#aaa;
+}
+
+.tabs button.active{
+  background:#3b82f6;
+  color:#fff;
+  font-weight:bold;
+}
+/* ==============================
+■ UI（入力・ボタン）
+============================== */
+input, select{
+  flex:1;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  background:#f1f5f9;
+  color:#000;
+}
+
+button{
+  padding:10px;
+  border-radius:10px;
+  background:#3b82f6;
+  color:white;
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover{
+  background:#2563eb;
+}
+
+/* ==============================
+■ テーブル
+============================== */
+table{
+  width:100%;
+  border-collapse: collapse;
+  font-size:12px;
+}
+
+th{
+  background:#334155;
+  position: sticky;
+  top: 0;
+}
+
+td, th{
+  padding:6px;
+  border-bottom:1px solid #475569;
+  text-align:center;
+}
+
+tr:nth-child(even){
+  background:#1e293b;
+}
+
+tr:nth-child(odd){
+  background:#0f172a;
+}
+
+/* 横スクロール */
+#tableWrap, #weekdayBest, #tableWrap2, #weekdayBest3{
+  overflow-x:auto;
+}
+#tableWrap3{
+  max-height: 40vh;   /* 画面の40% */
+  overflow-y: auto;
+}
+
+#weekdayBest td:first-child,
+#weekdayBest th:first-child {
+  white-space: nowrap;
+}
+/* ==============================
+■ ヘッダー
+============================== */
+.header-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.header-bar button {
+  position: absolute;
+  right: 0;
+}
+
+#manageBtn, #manageBtn2{
+  font-size:18px;
+  padding:6px 10px;
+}
+
+/* ==============================
+■ モーダル（共通）
+============================== */
+.modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content{
+  background:#1e293b;
+  padding:20px;
+  border-radius:12px;
+  width:90%;
+  max-width:320px;
+}
+
+/* チェックボックス */
+#modalCheckboxes{
+  max-height:200px;
+  overflow-y:auto;
+  margin-bottom:10px;
+}
+
+#modalCheckboxes label{
+  display:flex;
+  gap:6px;
+  margin-bottom:6px;
+}
+
+/* ==============================
+■ グラフモーダル
+============================== */
+.graph-modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:#0f172a;
+  z-index:9999;
+}
+
+.graph-modal-content{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  padding:10px;
+}
+
+.graph-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 0;
+}
+
+#modalChart1{
+  width:100% !important;
+  height:60vh !important;
+}
+#modalChart2{
+  width:100% !important;
+  height:60vh !important;
+}
+#modalChart3{
+  width:100% !important;
+  height:40vh !important;
+}
+
+/* ==============================
+■ アコーディオン
+============================== */
+.accordion-title {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px;
+  background: #334155;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+/* ==============================
+■ ページ2（順位）
+============================== */
+.rank-table .clan-col {
+  font-size: 10px;
+  max-width: 40px;
+  white-space: nowrap;
+}
+
+.rank-table td:first-child,
+.rank-table th:first-child {
+  white-space: nowrap;
+}
+
+#tableWrap2 th {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: nowrap;
+}
+
+/* 平均順位 */
+#avgRankBox table {
+  width: 100%;
+  font-size: 13px;
+}
+
+#avgRankBox td {
+  padding: 6px;
+  border-bottom: 1px solid #475569;
+}
+
+/* 個人別最高スコア */
+#bestScoreBox td:first-child {
+  font-weight: bold;
+}
+
+/* 1位（順位セルだけ） */
+.rank1, .rank2, .rank3 {
+  font-weight: bold;
+}
+
+.rank1 {
+  color: #FFD700;
+  text-shadow: 0 0 6px rgba(255,215,0,0.7);
+}
+
+.rank2 {
+  color: #C0C0C0;
+  text-shadow: 0 0 6px rgba(192,192,192,0.7);
+}
+
+.rank3 {
+  color: #CD7F32;
+  text-shadow: 0 0 6px rgba(205,127,50,0.7);
+}
