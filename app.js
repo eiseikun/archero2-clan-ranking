@@ -1665,6 +1665,7 @@ window.drawChart3 = function () {
   });
 };
 window.runOCR = async function () {
+
   const file = document.getElementById("ocrImage").files[0];
   if (!file) return alert("画像選んで");
 
@@ -1679,11 +1680,9 @@ window.runOCR = async function () {
   canvas.height = img.height;
   ctx.drawImage(img, 0, 0);
 
-  // ==========================
-  // 🔥 行検出（固定レイアウト用）
-  // ==========================
-  const startY = Math.floor(img.height * 0.35); // 上3位スキップ
-  const rowHeight = Math.floor(img.height * 0.075);
+  // 🔥 調整ポイント
+  const startY = img.height * 0.34;
+  const rowHeight = img.height * 0.078;
 
   const results = [];
 
@@ -1691,12 +1690,13 @@ window.runOCR = async function () {
 
     const y = startY + i * rowHeight;
 
- const crop = ctx.getImageData(
-  img.width * 0.6,   // ←右側だけ
-  y,
-  img.width * 0.35, // ←幅も制限
-  rowHeight
-);
+    // ✅ スコアだけ切る
+    const crop = ctx.getImageData(
+      img.width * 0.6,
+      y,
+      img.width * 0.35,
+      rowHeight
+    );
 
     const temp = document.createElement("canvas");
     temp.width = crop.width;
@@ -1705,23 +1705,19 @@ window.runOCR = async function () {
     const tctx = temp.getContext("2d");
     tctx.putImageData(crop, 0, 0);
 
-    // ==========================
-    // 🔥 前処理（超重要）
-    // ==========================
+    // ✅ 白黒化
     const imgData = tctx.getImageData(0, 0, temp.width, temp.height);
     const data = imgData.data;
 
     for (let j = 0; j < data.length; j += 4) {
       const avg = (data[j] + data[j + 1] + data[j + 2]) / 3;
       const v = avg > 140 ? 255 : 0;
-      data[j] = data[j + 1] = data[j + 2] = v;
+      data[j] = data[j+1] = data[j+2] = v;
     }
 
     tctx.putImageData(imgData, 0, 0);
 
-    // ==========================
-    // 🔥 OCR実行
-    // ==========================
+    // ✅ OCR
     const { data: { text } } = await Tesseract.recognize(
       temp,
       "eng",
@@ -1731,35 +1727,26 @@ window.runOCR = async function () {
       }
     );
 
-    // ==========================
-    // 🔥 解析（数字抽出）
-    // ==========================
-    const scoreMatch = text.match(/(\d+\.\d+)(T|B)/);
-    const rank = i + 4;
+    console.log("OCR:", text);
 
-    if (!scoreMatch) continue;
+    const match = text.match(/(\d+\.\d+)(T|B)/);
+    if (!match) continue;
 
-    let score = parseFloat(scoreMatch[1]);
-    const unit = scoreMatch[2];
+    let score = parseFloat(match[1]);
+    const unit = match[2];
 
-    // B → T換算
     if (unit === "B") score = score / 1000;
 
-    const rank = rankMatch ? Number(rankMatch[0]) : i + 4;
+    const rank = i + 4;
 
     results.push({
       rank,
       score
     });
-
   }
 
-  console.log("取得結果", results);
+  console.log("取得結果:", results);
 
-  
-  // ==========================
-  // 🔥 Firestore自動登録
-  // ==========================
   const today = new Date().toISOString().slice(0, 10);
 
   for (const r of results) {
@@ -1767,11 +1754,9 @@ window.runOCR = async function () {
     const clan = getClanByRank(r.rank);
     if (!clan) continue;
 
-    const docId = `${today}_${clan}`;
-
-    await setDoc(doc(db, "scores", docId), {
+    await setDoc(doc(db, "scores", `${today}_${clan}`), {
       clan,
-      score: r.score * 1000, // T→Bに戻す
+      score: r.score * 1000,
       date: today,
       time: Date.now()
     });
