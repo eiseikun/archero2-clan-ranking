@@ -287,14 +287,28 @@ tr:nth-child(odd){ background:#0f172a; }
 /* ==============================
 ■ OCR
 ============================== */
-/* ファイル入力はみ出し防止 */
-input[type="file"] {
-  flex: none;
+/* 親の縦レイアウトを明示（重要） */
+.row.column{
+  display: flex;
+  flex-direction: column;
+}
+/* ファイル入力（最重要：完全fix） */
+input[type="file"]{
+  flex: none !important;
   width: 100%;
   max-width: 100%;
+  min-width: 0;          /* ← はみ出し防止の本体 */
+  box-sizing: border-box; /* ← padding込みで収まる */
 }
 
-/* ファイルボタン */
+/* OCR内限定（さらに安全） */
+.row.column input[type="file"]{
+  flex: none !important;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ファイル選択ボタン部分 */
 input[type="file"]::file-selector-button{
   padding:8px 14px;
   border:none;
@@ -302,13 +316,10 @@ input[type="file"]::file-selector-button{
   color:white;
   border-radius:6px;
   cursor:pointer;
+  font-size:12px;  /* ← 少しコンパクト */
 }
 input[type="file"]::file-selector-button:hover{
   background:#336fe0;
-}
-
-.row.column input[type="file"] {
-  flex: none;
 }
 
 /* OCR入力欄 */
@@ -319,6 +330,7 @@ input[type="file"]::file-selector-button:hover{
   border-radius:6px;
   border:none;
   text-align:center;
+  box-sizing: border-box;
 }
 
 /* 未入力 */
@@ -327,7 +339,7 @@ input[type="file"]::file-selector-button:hover{
   background:#2b1a1a;
 }
 
-/* デバッグ */
+/* デバッグ表示 */
 #debugMain{
   margin-top:10px;
   display:flex;
@@ -337,5 +349,10 @@ input[type="file"]::file-selector-button:hover{
 #debugMain canvas{
   border:2px solid #444;
   max-width:200px;
+}
+
+/* 念のため外側も防御*/
+.box{
+  overflow:hidden;
 }
 
