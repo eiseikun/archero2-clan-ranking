@@ -46,7 +46,7 @@
    
    <!-- OCR読取 -->
 <div class="box">
-  <h3>📷 OCR読取（高精度版）</h3>
+  <h3>📷 OCR読取</h3>
   <label>
     <input type="checkbox" id="debugToggleMain">
     デバッグ
@@ -83,33 +83,7 @@
     <div class="row"><input id="date" type="date"></div>
     <div class="row"><button onclick="add()">追加</button></div>
   </div>
-  
-<!-- =============================
-  ■ OCR取込
-============================= -->
-<div class="box">
-  <h3>📷 OCR取込</h3>
-
-  <label>
-    <input type="checkbox" id="debugToggleMain">
-    デバッグモード
-  </label>
-
-  <div class="row">
-    <input type="file" id="img1Main">
-    <input type="file" id="img2Main">
-  </div>
-
-  <div class="row">
-    <button onclick="runOCRMain()">OCR解析</button>
-    <button onclick="saveOCRToScores()">全体記録に保存</button>
-  </div>
-
-  <div id="ocrResult"></div>
-  <div id="debugMain"></div>
-</div>
-
-  
+    
   <div class="box" id="weekdayCapture">
     <h3>🏆 曜日別最高スコア</h3>
     <div id="weekdayBest"></div>
