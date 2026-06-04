@@ -30,9 +30,9 @@
   <button id="tab3" onclick="showPage(3)">個人用</button>
 </div>
 
-<!-- =============================
+<!-- =========================================================
   ▼ ページ1：全体記録
-============================= -->
+========================================================= -->
 <div id="page1">
 
   <!-- ヘッダー -->
@@ -41,104 +41,103 @@
     <button onclick="toggleManage()" id="manageBtn">⚙️</button>
   </div>
 
-  <!-- CSV管理 -->
- <div id="manageArea" class="box" style="display:none;">
-   
-  <input type="file" id="csvFile">
-  <div class="row">
-    <button onclick="importCSV()">CSV取込</button>
-    <button onclick="exportCSV()">CSV出力</button>
-  </div>
-  <!-- 画像 -->
-  <div class="row">
-    <button onclick="saveWeekdayBestImage()">📸 曜日別画像保存</button>
-  </div>
-</div>
-  
-   <!-- OCR読取 -->
-<div class="box">
-  <h3 class="accordion-title" onclick="toggleOCRBox()">📷 OCR読取</h3>
+  <!-- 管理（CSV・画像） -->
+  <div id="manageArea" class="box" style="display:none;">
+    <input type="file" id="csvFile">
 
-  <!-- ✅ここに id を追加 -->
-  <div id="ocrBox" style="display:none;">
-
-    <label>
-      <input type="checkbox" id="debugToggleMain">
-      デバッグ
-    </label>
-    <div class="row column">
-      <input type="file" id="img1Main">
-      <input type="file" id="img2Main">
-    </div>
-    <!-- 日付追加 -->
     <div class="row">
-      <input type="date" id="ocrDate">
+      <button onclick="importCSV()">CSV取込</button>
+      <button onclick="exportCSV()">CSV出力</button>
     </div>
 
     <div class="row">
-      <button onclick="runOCRMain()">OCR解析</button>
-      <button onclick="saveOCRHigh()">保存</button>
+      <button onclick="saveWeekdayBestImage()">📸 曜日別画像保存</button>
     </div>
-
-    <div id="ocrResult"></div>
-    <div id="debugMain"></div>
-
   </div>
-</div>
-  
+  <!-- OCR読取 -->
+  <div class="box">
+    <h3 class="accordion-title" onclick="toggleOCRBox()">📷 OCR読取</h3>
+    <div id="ocrBox" style="display:none;">
+      <label>
+        <input type="checkbox" id="debugToggleMain">
+        デバッグ
+      </label>
+      
+      <div class="row column">
+        <input type="file" id="img1Main">
+        <input type="file" id="img2Main">
+      </div>
+
+      <div class="row">
+        <input type="date" id="ocrDate">
+      </div>
+
+      <div class="row">
+        <button onclick="runOCRMain()">OCR解析</button>
+        <button onclick="saveOCRHigh()">保存</button>
+      </div>
+      <div id="ocrResult"></div>
+      <div id="debugMain"></div>
+    </div>
+  </div>
   <!-- データ追加 -->
   <div class="box">
     <h3>➕ データ追加</h3>
-    <div class="row"><select id="clan"></select></div>
-    <div class="row"><input id="score" type="number" placeholder="スコア"></div>
-    <div class="row"><input id="date" type="date"></div>
-    <div class="row"><button onclick="add()">追加</button></div>
+    <div class="row">
+      <select id="clan"></select>
+    </div>
+    <div class="row">
+      <input id="score" type="number" placeholder="スコア">
+    </div>
+    <div class="row">
+      <input id="date" type="date">
+    </div>
+    <div class="row">
+      <button onclick="add()">追加</button>
+    </div>
   </div>
-    
+  
+  <!-- 曜日別最高スコア -->
   <div class="box" id="weekdayCapture">
     <h3>🏆 曜日別最高スコア</h3>
     <div id="weekdayBest"></div>
   </div>
-
+  
   <!-- グラフ -->
   <div class="box">
     <h3 class="accordion-title" onclick="toggleGraphBox()">📈 グラフ生成</h3>
-
     <div id="graphBox" style="display:none;">
       <div class="row">
         <input type="date" id="startDate">
         <input type="date" id="endDate">
       </div>
-
       <div class="row">
         <button onclick="openModal()">クラン選択</button>
         <span id="selectedClansText">未選択</span>
       </div>
-
       <div class="row">
         <select id="graphMode">
           <option value="score">スコア推移</option>
           <option value="rank">順位推移</option>
         </select>
       </div>
-
       <div class="row">
         <button onclick="drawChart()">グラフ生成</button>
       </div>
     </div>
   </div>
-
+  
   <!-- 一覧 -->
   <div class="box">
     <h3>📊 一覧</h3>
     <div id="tableWrap"></div>
   </div>
-
 </div>
 
-<!-- =============================
+
+<!-- =========================================================
   ▼ ページ2：ねこ海賊団
-============================= -->
+========================================================= -->
 <div id="page2" style="display:none">
 
   <div class="header-bar">
@@ -146,13 +145,15 @@
     <button onclick="toggleManage2()" id="manageBtn2">⚙️</button>
   </div>
 
-  <!-- CSV -->
+  <!-- 管理 -->
   <div id="manageArea2" class="box" style="display:none;">
     <input type="file" id="csvFile2">
+
     <div class="row">
       <button onclick="importCSV2()">CSV取込</button>
       <button onclick="exportCSV2()">CSV出力</button>
     </div>
+
     <div class="row">
       <button onclick="saveBestScoreImage()">📸 最高スコア</button>
       <button onclick="saveAvgRankImage()">📸 平均順位</button>
@@ -175,65 +176,61 @@
   </div>
   
   <!-- 平均順位 -->
-<div class="box" id="avgRankCapture">
-  <h3>📊 平均順位</h3>
+  <div class="box" id="avgRankCapture">
+    <h3>📊 平均順位</h3>
 
-  <div class="row">
-    <input type="date" id="startDateRank">
-    <input type="date" id="endDateRank">
+    <div class="row">
+      <input type="date" id="startDateRank">
+      <input type="date" id="endDateRank">
+    </div>
+
+    <div class="row">
+      <button onclick="applyAvgRank()">反映</button>
+    </div>
+
+    <div id="avgRankBox"></div>
   </div>
 
-  <div class="row">
-    <button onclick="applyAvgRank()">反映</button>
+  <!-- グラフ -->
+  <div class="box">
+    <h3 class="accordion-title" onclick="toggleRankGraphBox()">📈 順位推移グラフ</h3>
+
+    <div id="rankGraphBox" style="display:none;">
+      <div class="row">
+        <input type="date" id="rankGraphStart">
+        <input type="date" id="rankGraphEnd">
+      </div>
+
+      <div class="row">
+        <button onclick="openMemberModal()">メンバー選択</button>
+        <span id="selectedMembersText">未選択</span>
+      </div>
+
+      <div class="row">
+        <button onclick="drawRankGraph()">グラフ生成</button>
+      </div>
+    </div>
   </div>
 
-  <div id="avgRankBox"></div>
-</div>
-
-<!-- 順位推移グラフ -->
-<div class="box">
-  <h3 class="accordion-title" onclick="toggleRankGraphBox()">
-    📈 順位推移グラフ
-  </h3>
-  <div id="rankGraphBox" style="display:none;">
-    <div class="row">
-      <input type="date" id="rankGraphStart">
-      <input type="date" id="rankGraphEnd">
-    </div>
-    <div class="row">
-      <button onclick="openMemberModal()">
-        メンバー選択
-      </button>
-      <span id="selectedMembersText">
-        未選択
-      </span>
-    </div>
-    <div class="row">
-      <button onclick="drawRankGraph()">
-        グラフ生成
-      </button>
-    </div>
-  </div>
-</div>
-  
-  <!-- 個人別最高スコア -->
+  <!-- 個人最高 -->
   <div class="box" id="bestScoreCapture">
     <h3>☠個人別最高スコア☠</h3>
     <div id="bestScoreBox"></div>
   </div>
-  
+
   <!-- 一覧 -->
   <div class="box">
     <h3>📋 順位一覧</h3>
     <div id="tableWrap2"></div>
   </div>
-
+  
 </div>
 
-<!-- =============================
-  ▼ ページ3：個人用
-============================= -->
+<!-- =========================================================
+  ▼ ページ3
+========================================================= -->
 <div id="page3" style="display:none">
+
 
   <div class="header-bar">
     <h1>👤個人記録</h1>
