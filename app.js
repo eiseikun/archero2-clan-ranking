@@ -2,8 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // =============================
-// Firebase
-// =============================
 const firebaseConfig = {
   apiKey: "AIzaSyBCBvYwXTGGAGw40lrq0-QBLN_Bm8eqRL4",
   authDomain: "clan-ranking2.firebaseapp.com",
@@ -23,39 +21,56 @@ const clans = [
 ];
 
 // =============================
-// ★★★ 調整ポイントまとめ ★★★
+// ★★★★★ 調整ポイント ★★★★★
 
-// ▼ スコアの横位置（ズレたらここ）
-const SCORE_X = 760;
+// ===== 1位（中央）=====
+const TOP1 = {
+  nameX: 450,   // クラン名位置
+  nameY: 420,
+  scoreX: 450,  // スコア位置（下）
+  scoreY: 600
+};
 
-// ▼ スコアの横幅
-const SCORE_W = 350;
+// ===== 2位（左）=====
+const TOP2 = {
+  nameX: 150,
+  nameY: 520,
+  scoreX: 150,
+  scoreY: 700
+};
 
-// ▼ スコアの高さ（数字切れるとき増やす）
-const SCORE_H = 95;
+// ===== 3位（右）=====
+const TOP3 = {
+  nameX: 750,
+  nameY: 520,
+  scoreX: 750,
+  scoreY: 700
+};
 
-// ▼ 名前の位置（ズレたらここ）
-const NAME_X = 200;
-const NAME_W = 400;
-const NAME_H = 90;
+// ==== サイズ ====
+const NAME_W = 300;
+const NAME_H = 80;
 
-// ▼ 上位3（ここが超重要）
-const topRows = [
-  { y: 500 },   // ← 1位（ズレたらここ調整）
-  { y: 650 },   // ← 2位
-  { y: 800 }    // ← 3位
-];
+const SCORE_W = 300;
+const SCORE_H = 90;
 
-// ▼ 4位以降（ここを上下すると全体が動く）
+// ===== 4位以降 =====
+// ↓ 全体上下移動するならここ
 const rows = [
-  { y:1050 },  // ← 4位
-  { y:1200 },  // ← 5位
-  { y:1350 },  // ← 6位
-  { y:1500 },  // ← 7位
-  { y:1650 },  // ← 8位
-  { y:1800 },  // ← 9位
-  { y:1950 }   // ← 10位以降
+  { y:1050 },
+  { y:1200 },
+  { y:1350 },
+  { y:1500 },
+  { y:1650 },
+  { y:1800 },
+  { y:1950 }
 ];
+
+// ↓ 名前横位置
+const NAME_X = 200;
+
+// ↓ スコア横位置（ここ超重要）
+const SCORE_X = 760;
 
 // =============================
 function isDebug(){
@@ -63,7 +78,7 @@ function isDebug(){
 }
 
 // =============================
-// 描画（デバッグ用）
+// 描画
 // =============================
 function drawRect(ctx,x,y,w,h,color="red"){
   ctx.strokeStyle=color;
@@ -82,28 +97,6 @@ function drawCross(ctx,x,y){
 }
 
 // =============================
-// Y補正（ズレ吸収）
-// =============================
-function adjustY(canvas, baseY){
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width;
-
-  for(let o=-30;o<=30;o++){
-    const y = baseY + o;
-    const row = ctx.getImageData(0,y,w,1).data;
-
-    let sum=0;
-    for(let i=0;i<row.length;i+=4){
-      sum+=row[i];
-    }
-
-    if(sum/w > 140) return y;
-  }
-
-  return baseY;
-}
-
-// =============================
 // OCR前処理
 // =============================
 function preprocess(ctx,w,h){
@@ -119,8 +112,6 @@ function preprocess(ctx,w,h){
   ctx.putImageData(img,0,0);
 }
 
-// =============================
-// 切り抜き
 // =============================
 function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
@@ -142,8 +133,7 @@ function crop(canvas,x,y,w,h){
 // OCR
 // =============================
 function normalize(text){
-  text = text.replace(/[^\d.]/g,"");
-  return parseFloat(text);
+  return parseFloat(text.replace(/[^\d.]/g,""));
 }
 
 async function readScore(canvas){
@@ -159,8 +149,6 @@ async function readName(canvas){
 }
 
 // =============================
-// クランマッチ（後で強化可能）
-// =============================
 function matchClan(text){
   for(const c of clans){
     if(text.includes(c)) return c;
@@ -169,23 +157,33 @@ function matchClan(text){
 }
 
 // =============================
-// 行読み取り
+// ★ 上位専用
+// =============================
+async function readTop(canvas, pos){
+
+  const nameCrop = crop(canvas, pos.nameX, pos.nameY, NAME_W, NAME_H);
+  const scoreCrop = crop(canvas, pos.scoreX, pos.scoreY, SCORE_W, SCORE_H);
+
+  const name = matchClan(await readName(nameCrop));
+  const score = await readScore(scoreCrop);
+
+  return {name,score};
+}
+
+// =============================
+// ★ 下位
 // =============================
 async function readRow(canvas,y){
 
   const nameCrop = crop(canvas, NAME_X, y, NAME_W, NAME_H);
   const scoreCrop = crop(canvas, SCORE_X, y, SCORE_W, SCORE_H);
 
-  const nameRaw = await readName(nameCrop);
+  const name = matchClan(await readName(nameCrop));
   const score = await readScore(scoreCrop);
-
-  const name = matchClan(nameRaw);
 
   return {name,score};
 }
 
-// =============================
-// メイン
 // =============================
 window.runOCR = async function(){
 
@@ -205,50 +203,40 @@ window.runOCR = async function(){
       document.getElementById("debug").appendChild(canvas);
     }
 
-    // クリック座標取得
+    // クリック用
     canvas.onclick = (e)=>{
       if(!isDebug()) return;
-
       const rect = canvas.getBoundingClientRect();
       const x = Math.floor(e.clientX - rect.left);
       const y = Math.floor(e.clientY - rect.top);
-
       console.log(`x:${x}, y:${y}`);
       drawCross(ctx,x,y);
     };
 
-    // =====================
-    // ★ 1〜3位処理
-    // =====================
-    for(const r of topRows){
-
-      const y = adjustY(canvas,r.y);
+    // ===== 上位 =====
+    for(const pos of [TOP1, TOP2, TOP3]){
 
       if(isDebug()){
-        drawRect(ctx, NAME_X, y, NAME_W, NAME_H, "green"); // 名前
-        drawRect(ctx, SCORE_X, y, SCORE_W, SCORE_H, "blue"); // スコア
+        drawRect(ctx,pos.nameX,pos.nameY,NAME_W,NAME_H,"green");
+        drawRect(ctx,pos.scoreX,pos.scoreY,SCORE_W,SCORE_H,"blue");
       }
 
-      const row = await readRow(canvas,y);
+      const r = await readTop(canvas,pos);
 
-      if(row.name && row.score){
-        all.push(row);
+      if(r.name && r.score){
+        all.push(r);
       }
     }
 
-    // =====================
-    // ★ 4位以降
-    // =====================
+    // ===== 4位以降 =====
     for(const r of rows){
 
-      const y = adjustY(canvas,r.y);
-
       if(isDebug()){
-        drawRect(ctx, NAME_X, y, NAME_W, NAME_H, "green");
-        drawRect(ctx, SCORE_X, y, SCORE_W, SCORE_H, "red");
+        drawRect(ctx,NAME_X,r.y,NAME_W,NAME_H,"green");
+        drawRect(ctx,SCORE_X,r.y,SCORE_W,SCORE_H,"red");
       }
 
-      const row = await readRow(canvas,y);
+      const row = await readRow(canvas,r.y);
 
       if(row.name && row.score){
         all.push(row);
@@ -256,7 +244,7 @@ window.runOCR = async function(){
     }
   }
 
-  // 重複除去
+  // 重複排除
   const map = {};
   for(const r of all){
     map[r.name] = r.score;
@@ -275,10 +263,7 @@ window.runOCR = async function(){
 };
 
 // =============================
-// 表示
-// =============================
 function render(records){
-
   const tbody = document.querySelector("#table tbody");
   tbody.innerHTML="";
 
@@ -343,3 +328,4 @@ function toCanvas(img){
   c.getContext("2d").drawImage(img,0,0);
   return c;
 }
+``
