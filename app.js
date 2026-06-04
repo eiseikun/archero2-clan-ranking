@@ -26,24 +26,24 @@ const clans = [
 // ===== 1位（中央）=====
 const TOP1 = {
   nameX: 450,   // クラン名位置
-  nameY: 420,
+  nameY: 590,
   scoreX: 450,  // スコア位置（下）
-  scoreY: 600
+  scoreY: 650
 };
 
 // ===== 2位（左）=====
 const TOP2 = {
-  nameX: 150,
-  nameY: 520,
-  scoreX: 150,
+  nameX: 120,
+  nameY: 600,
+  scoreX: 120,
   scoreY: 700
 };
 
 // ===== 3位（右）=====
 const TOP3 = {
-  nameX: 750,
-  nameY: 520,
-  scoreX: 750,
+  nameX: 850,
+  nameY: 600,
+  scoreX: 850,
   scoreY: 700
 };
 
