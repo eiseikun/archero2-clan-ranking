@@ -287,6 +287,13 @@ tr:nth-child(odd){ background:#0f172a; }
 /* ==============================
 ■ OCR
 ============================== */
+/* ファイル入力はみ出し防止 */
+input[type="file"] {
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+}
+
 /* ファイルボタン */
 input[type="file"]::file-selector-button{
   padding:8px 14px;
@@ -298,6 +305,10 @@ input[type="file"]::file-selector-button{
 }
 input[type="file"]::file-selector-button:hover{
   background:#336fe0;
+}
+
+.row.column input[type="file"] {
+  flex: none;
 }
 
 /* OCR入力欄 */
