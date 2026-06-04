@@ -18,3 +18,8 @@ td,th{
 input{
   width:90px;
 }
+
+#debug canvas{
+  margin-top:20px;
+  border:2px solid #444;
+}
