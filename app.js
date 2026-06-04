@@ -28,7 +28,7 @@ const clans = [
 const TOP1 = {
   nameX: 460,  // ← 横ズレ
   nameY: 590,  // ← 縦ズレ
-  scoreX: 510,
+  scoreX: 550,
   scoreY: 665
 };
 
@@ -36,7 +36,7 @@ const TOP1 = {
 const TOP2 = {
   nameX: 120,
   nameY: 650,
-  scoreX: 150,
+  scoreX: 180,
   scoreY: 700
 };
 
@@ -44,7 +44,7 @@ const TOP2 = {
 const TOP3 = {
   nameX: 850,
   nameY: 670,
-  scoreX: 900,
+  scoreX: 920,
   scoreY: 730
 };
 
