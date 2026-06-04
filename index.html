@@ -57,21 +57,33 @@
   
    <!-- OCR読取 -->
 <div class="box">
-  <h3>📷 OCR読取</h3>
-  <label>
-    <input type="checkbox" id="debugToggleMain">
-    デバッグ
-  </label>
-  <div class="row">
-    <input type="file" id="img1Main">
-    <input type="file" id="img2Main">
+  <h3 class="accordion-title" onclick="toggleOCRBox()">📷 OCR読取</h3>
+
+  <!-- ✅ここに id を追加 -->
+  <div id="ocrBox" style="display:none;">
+
+    <label>
+      <input type="checkbox" id="debugToggleMain">
+      デバッグ
+    </label>
+    <div class="row column">
+      <input type="file" id="img1Main">
+      <input type="file" id="img2Main">
+    </div>
+    <!-- 日付追加 -->
+    <div class="row">
+      <input type="date" id="ocrDate">
+    </div>
+
+    <div class="row">
+      <button onclick="runOCRMain()">OCR解析</button>
+      <button onclick="saveOCRHigh()">保存</button>
+    </div>
+
+    <div id="ocrResult"></div>
+    <div id="debugMain"></div>
+
   </div>
-  <div class="row">
-    <button onclick="runOCRMain()">OCR解析</button>
-    <button onclick="saveOCRHigh()">保存</button>
-  </div>
-  <div id="ocrResult"></div>
-  <div id="debugMain"></div>
 </div>
   
   <!-- データ追加 -->
