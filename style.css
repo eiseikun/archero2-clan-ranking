@@ -107,13 +107,8 @@ td, th{
   text-align:center;
 }
 
-tr:nth-child(even){
-  background:#1e293b;
-}
-
-tr:nth-child(odd){
-  background:#0f172a;
-}
+tr:nth-child(even){ background:#1e293b; }
+tr:nth-child(odd){ background:#0f172a; }
 
 /* 横スクロール */
 #tableWrap, #weekdayBest, #tableWrap2, #weekdayBest3{
@@ -151,18 +146,6 @@ tr:nth-child(odd){
 /* ==============================
 ■ モーダル（共通）
 ============================== */
-.modal{
-  display:none;
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.7);
-  justify-content:center;
-  align-items:center;
-}
-
 .modal{
   display:none;
   position:fixed;
@@ -224,30 +207,17 @@ tr:nth-child(odd){
   padding:10px 0;
 }
 
-#modalChart1{
-  width:100% !important;
-  height:60vh !important;
-}
+#modalChart1,
 #modalChart2{
   width:100% !important;
   height:60vh !important;
 }
+
 #modalChart3{
   width:100% !important;
   height:40vh !important;
 }
 
-/* ==============================
-■ アコーディオン
-============================== */
-.accordion-title {
-  cursor: pointer;
-  user-select: none;
-  padding: 10px;
-  background: #334155;
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
 /* ==============================
 ■ ページ2（順位）
 ============================== */
@@ -303,8 +273,21 @@ tr:nth-child(odd){
   color: #CD7F32;
   text-shadow: 0 0 6px rgba(205,127,50,0.7);
 }
-
-/* OCR用 ファイル選択ボタン */
+/* ==============================
+■ アコーディオン
+============================== */
+.accordion-title {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px;
+  background: #334155;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+/* ==============================
+■ OCR
+============================== */
+/* ファイルボタン */
 input[type="file"]::file-selector-button{
   padding:8px 14px;
   border:none;
@@ -316,6 +299,7 @@ input[type="file"]::file-selector-button{
 input[type="file"]::file-selector-button:hover{
   background:#336fe0;
 }
+
 /* OCR入力欄 */
 #ocrResult input{
   width:100%;
@@ -325,11 +309,14 @@ input[type="file"]::file-selector-button:hover{
   border:none;
   text-align:center;
 }
-/* OCR未入力は赤 */
+
+/* 未入力 */
 #ocrResult input:placeholder-shown{
   border:2px solid #ff4d4d;
   background:#2b1a1a;
 }
+
+/* デバッグ */
 #debugMain{
   margin-top:10px;
   display:flex;
@@ -340,20 +327,4 @@ input[type="file"]::file-selector-button:hover{
   border:2px solid #444;
   max-width:200px;
 }
-#ocrResult {
-  overflow-x: auto;
-}
 
-#ocrResult table {
-  width: 100%;
-  min-width: 300px;
-}
-
-#ocrResult input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.row.column {
-  flex-direction: column;
-}
