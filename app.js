@@ -22,27 +22,12 @@ const clans = [
 ];
 
 /* =============================
- 上位座標（調整）
+ 座標（調整用）
 ============================= */
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
 const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
 const TOP3 = { nameX:850, nameY:670, scoreX:920, scoreY:730 };
 
-/* =============================
- サイズ
-============================= */
-const TOP1_NAME_W = 250, TOP1_NAME_H = 60;
-const TOP1_SCORE_W = 170, TOP1_SCORE_H = 60;
-
-const TOP23_NAME_W = 250, TOP23_NAME_H = 70;
-const TOP23_SCORE_W = 170, TOP23_SCORE_H = 70;
-
-const ROW_NAME_W = 350, ROW_NAME_H = 90;
-const ROW_SCORE_W = 200, ROW_SCORE_H = 90;
-
-/* =============================
- 4位以降
-============================= */
 const rows = [
   { y:880 },{ y:1073 },{ y:1265 },
   { y:1458 },{ y:1650 },{ y:1843 },{ y:2035 }
@@ -50,19 +35,6 @@ const rows = [
 
 const NAME_X = 440;
 const SCORE_X = 895;
-
-/* =============================
- デバッグ
-============================= */
-function isDebug(){
-  return document.getElementById("debugToggle")?.checked;
-}
-
-function drawRect(ctx,x,y,w,h,color="red"){
-  ctx.strokeStyle=color;
-  ctx.lineWidth=3;
-  ctx.strokeRect(x,y,w,h);
-}
 
 /* =============================
  OCR補助
@@ -76,6 +48,7 @@ function preprocess(ctx,w,h){
     const v = gray>150?255:0;
     d[i]=d[i+1]=d[i+2]=v;
   }
+
   ctx.putImageData(img,0,0);
 }
 
@@ -88,39 +61,46 @@ function crop(canvas,x,y,w,h){
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
   preprocess(ctx,w*2,h*2);
 
-  if(isDebug()){
-    document.getElementById("debug").appendChild(c);
-  }
-
   return c;
 }
 
 /* =============================
- スコア補正（重要）
+ スコア（超重要）
 ============================= */
 function normalizeScore(text){
 
-  const cleaned = text
-    .replace("T","")
-    .replace(/[^\d.]/g,"");
+  // T削除
+  text = text.replace("T","");
 
-  let num = parseFloat(cleaned);
-  if(!num) return null;
+  // 数値だけ
+  const match = text.match(/[0-9]+\.[0-9]+/);
 
-  // 小数2桁
+  if(!match) return null;
+
+  let num = parseFloat(match[0]);
+
+  // 小数2桁固定
   num = Math.round(num*100)/100;
 
-  // 異常補正
+  // 異常値修正
   if(num > 1000) num /= 10;
 
   return num;
 }
 
 async function readScore(canvas){
-  const res = await Tesseract.recognize(canvas,"eng",{
-    tessedit_char_whitelist:"0123456789."
-  });
-  return normalizeScore(res.data.text);
+
+  const r1 = await Tesseract.recognize(canvas,"eng");
+  const r2 = await Tesseract.recognize(canvas,"eng");
+
+  const s1 = normalizeScore(r1.data.text);
+  const s2 = normalizeScore(r2.data.text);
+
+  if(s1 && s2){
+    return Math.abs(s1 - s2) < 50 ? s1 : s2;
+  }
+
+  return s1 || s2;
 }
 
 /* =============================
@@ -150,7 +130,7 @@ function levenshtein(a,b){
 }
 
 /* =============================
- クランマッチ（最重要）
+ クラン判定（100%化）
 ============================= */
 function matchClan(text){
 
@@ -161,42 +141,27 @@ function matchClan(text){
 
   for(const c of clans){
     const d = levenshtein(text,c);
-    if(d<min){
-      min=d;
-      best=c;
+    if(d < min){
+      min = d;
+      best = c;
     }
   }
 
-  return min<=3 ? best : null;
+  return min <= 3 ? best : null;
 }
 
 /* =============================
  読み取り
 ============================= */
-async function readTop(canvas,pos,type){
-
-  const size = type===1
-    ? [TOP1_NAME_W,TOP1_NAME_H,TOP1_SCORE_W,TOP1_SCORE_H]
-    : [TOP23_NAME_W,TOP23_NAME_H,TOP23_SCORE_W,TOP23_SCORE_H];
-
-  const name = matchClan(await readName(
-    crop(canvas,pos.nameX,pos.nameY,size[0],size[1])
-  ));
-
-  const score = await readScore(
-    crop(canvas,pos.scoreX,pos.scoreY,size[2],size[3])
-  );
-
+async function readTop(canvas,pos){
+  const name = matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,250,70)));
+  const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,200,80));
   return {name,score};
 }
 
 async function readRow(canvas,y){
-  const name = matchClan(await readName(
-    crop(canvas,NAME_X,y,ROW_NAME_W,ROW_NAME_H)
-  ));
-  const score = await readScore(
-    crop(canvas,SCORE_X,y,ROW_SCORE_W,ROW_SCORE_H)
-  );
+  const name = matchClan(await readName(crop(canvas,NAME_X,y,350,90)));
+  const score = await readScore(crop(canvas,SCORE_X,y,200,90));
   return {name,score};
 }
 
@@ -217,28 +182,21 @@ window.runOCR = async function(){
   for(const img of imgs){
 
     const canvas = toCanvas(img);
-    const ctx = canvas.getContext("2d");
-
-    if(isDebug()){
-      document.getElementById("debug").appendChild(canvas);
-    }
 
     // 上位
-    const topList = [
-      { ...TOP1, type:1 },
-      { ...TOP2, type:2 },
-      { ...TOP3, type:2 }
-    ];
-
-    for(const p of topList){
-      const r = await readTop(canvas,p,p.type);
-      if(r.name) map[r.name] = r.score ?? "";
+    for(const p of [TOP1,TOP2,TOP3]){
+      const r = await readTop(canvas,p);
+      if(r.name){
+        map[r.name] = r.score ?? "";
+      }
     }
 
     // 下位
     for(const r of rows){
       const row = await readRow(canvas,r.y);
-      if(row.name) map[row.name] = row.score ?? "";
+      if(row.name){
+        map[row.name] = row.score ?? "";
+      }
     }
   }
 
@@ -246,7 +204,7 @@ window.runOCR = async function(){
 };
 
 /* =============================
- ★ 手入力対応テーブル
+ 手入力テーブル（重要）
 ============================= */
 function renderEditable(map){
 
@@ -255,14 +213,23 @@ function renderEditable(map){
 
   clans.forEach(name=>{
 
-    const tr = document.createElement("tr");
+    const raw = map[name];
 
-    const score = map[name] ?? "";
+    const scoreStr = (raw !== "" && raw !== null)
+      ? Number(raw).toFixed(2)
+      : "";
+
+    const tr = document.createElement("tr");
 
     tr.innerHTML = `
       <td>${name}</td>
       <td>-</td>
-      <td><input value="${score}" placeholder="未取得"></td>
+      <td>
+        <input 
+          value="${scoreStr}" 
+          placeholder="未取得"
+        >
+      </td>
     `;
 
     tbody.appendChild(tr);
@@ -270,7 +237,7 @@ function renderEditable(map){
 }
 
 /* =============================
- 保存（順位再計算）
+ 保存
 ============================= */
 window.save = async function(){
 
@@ -280,17 +247,25 @@ window.save = async function(){
 
   rows.forEach(tr=>{
     const name = tr.children[0].innerText;
-    const score = parseFloat(tr.children[2].querySelector("input").value);
+    const val = tr.children[2].querySelector("input").value;
 
-    if(score) data.push({name,score});
+    if(val){
+      data.push({
+        name,
+        score: Number(val)
+      });
+    }
   });
 
-  // 順位再計算
+  // 順位計算
   data.sort((a,b)=>b.score-a.score);
 
   const records={};
   data.forEach((r,i)=>{
-    records[r.name]={rank:i+1,score:r.score};
+    records[r.name]={
+      rank:i+1,
+      score:r.score
+    };
   });
 
   const d = new Date();
@@ -309,10 +284,10 @@ window.save = async function(){
  util
 ============================= */
 function loadImage(file){
-  return new Promise(r=>{
-    const img = new Image();
-    img.onload=()=>r(img);
-    img.src = URL.createObjectURL(file);
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>res(img);
+    img.src=URL.createObjectURL(file);
   });
 }
 
