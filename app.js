@@ -14,7 +14,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // =============================
-// クラン一覧（固定）
+// クラン一覧
 // =============================
 const clans = [
   "魔導特務隊","最狂会","IgnisFloris","ポケポケ会",
@@ -23,18 +23,38 @@ const clans = [
 ];
 
 // =============================
+// ★★★ 調整ポイントまとめ ★★★
+
+// ▼ スコアの横位置（ズレたらここ）
 const SCORE_X = 760;
+
+// ▼ スコアの横幅
 const SCORE_W = 350;
+
+// ▼ スコアの高さ（数字切れるとき増やす）
 const SCORE_H = 95;
 
+// ▼ 名前の位置（ズレたらここ）
+const NAME_X = 200;
+const NAME_W = 400;
+const NAME_H = 90;
+
+// ▼ 上位3（ここが超重要）
+const topRows = [
+  { y: 500 },   // ← 1位（ズレたらここ調整）
+  { y: 650 },   // ← 2位
+  { y: 800 }    // ← 3位
+];
+
+// ▼ 4位以降（ここを上下すると全体が動く）
 const rows = [
-  { y:1050 },
-  { y:1200 },
-  { y:1350 },
-  { y:1500 },
-  { y:1650 },
-  { y:1800 },
-  { y:1950 }
+  { y:1050 },  // ← 4位
+  { y:1200 },  // ← 5位
+  { y:1350 },  // ← 6位
+  { y:1500 },  // ← 7位
+  { y:1650 },  // ← 8位
+  { y:1800 },  // ← 9位
+  { y:1950 }   // ← 10位以降
 ];
 
 // =============================
@@ -43,7 +63,7 @@ function isDebug(){
 }
 
 // =============================
-// 描画
+// 描画（デバッグ用）
 // =============================
 function drawRect(ctx,x,y,w,h,color="red"){
   ctx.strokeStyle=color;
@@ -62,7 +82,7 @@ function drawCross(ctx,x,y){
 }
 
 // =============================
-// Y補正
+// Y補正（ズレ吸収）
 // =============================
 function adjustY(canvas, baseY){
   const ctx = canvas.getContext("2d");
@@ -84,7 +104,7 @@ function adjustY(canvas, baseY){
 }
 
 // =============================
-// OCR系
+// OCR前処理
 // =============================
 function preprocess(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
@@ -99,6 +119,9 @@ function preprocess(ctx,w,h){
   ctx.putImageData(img,0,0);
 }
 
+// =============================
+// 切り抜き
+// =============================
 function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
   c.width = w*2;
@@ -115,6 +138,9 @@ function crop(canvas,x,y,w,h){
   return c;
 }
 
+// =============================
+// OCR
+// =============================
 function normalize(text){
   text = text.replace(/[^\d.]/g,"");
   return parseFloat(text);
@@ -133,7 +159,7 @@ async function readName(canvas){
 }
 
 // =============================
-// クランマッチ
+// クランマッチ（後で強化可能）
 // =============================
 function matchClan(text){
   for(const c of clans){
@@ -147,8 +173,8 @@ function matchClan(text){
 // =============================
 async function readRow(canvas,y){
 
-  const nameCrop = crop(canvas,200,y,400,90);
-  const scoreCrop = crop(canvas,SCORE_X,y,SCORE_W,SCORE_H);
+  const nameCrop = crop(canvas, NAME_X, y, NAME_W, NAME_H);
+  const scoreCrop = crop(canvas, SCORE_X, y, SCORE_W, SCORE_H);
 
   const nameRaw = await readName(nameCrop);
   const score = await readScore(scoreCrop);
@@ -179,7 +205,7 @@ window.runOCR = async function(){
       document.getElementById("debug").appendChild(canvas);
     }
 
-    // クリック取得
+    // クリック座標取得
     canvas.onclick = (e)=>{
       if(!isDebug()) return;
 
@@ -191,13 +217,35 @@ window.runOCR = async function(){
       drawCross(ctx,x,y);
     };
 
+    // =====================
+    // ★ 1〜3位処理
+    // =====================
+    for(const r of topRows){
+
+      const y = adjustY(canvas,r.y);
+
+      if(isDebug()){
+        drawRect(ctx, NAME_X, y, NAME_W, NAME_H, "green"); // 名前
+        drawRect(ctx, SCORE_X, y, SCORE_W, SCORE_H, "blue"); // スコア
+      }
+
+      const row = await readRow(canvas,y);
+
+      if(row.name && row.score){
+        all.push(row);
+      }
+    }
+
+    // =====================
+    // ★ 4位以降
+    // =====================
     for(const r of rows){
 
       const y = adjustY(canvas,r.y);
 
       if(isDebug()){
-        drawRect(ctx,200,y,400,90,"green");
-        drawRect(ctx,SCORE_X,y,SCORE_W,SCORE_H,"red");
+        drawRect(ctx, NAME_X, y, NAME_W, NAME_H, "green");
+        drawRect(ctx, SCORE_X, y, SCORE_W, SCORE_H, "red");
       }
 
       const row = await readRow(canvas,y);
@@ -226,6 +274,8 @@ window.runOCR = async function(){
   render(records);
 };
 
+// =============================
+// 表示
 // =============================
 function render(records){
 
