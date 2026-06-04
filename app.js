@@ -36,16 +36,16 @@ const TOP1 = {
 const TOP2 = {
   nameX: 120,
   nameY: 650,
-  scoreX: 130,
+  scoreX: 150,
   scoreY: 700
 };
 
 // ▼3位（右）
 const TOP3 = {
   nameX: 850,
-  nameY: 660,
-  scoreX: 850,
-  scoreY: 740
+  nameY: 670,
+  scoreX: 900,
+  scoreY: 735
 };
 
 // =============================
@@ -77,7 +77,7 @@ const ROW_SCORE_H = 90;
 
 const rows = [
   { y:880 }, // ← 4位
-  { y:1080 },
+  { y:1070 },
   { y:1200 },
   { y:1475 },
   { y:1650 },
