@@ -1,121 +1,307 @@
-/* 全体 */
+/* ==============================
+■ ベース
+============================== */
 body{
-  font-family: sans-serif;
-  padding:20px;
-  background:#f5f7fa;
-  max-width:1200px;
-  margin:0 auto;
+  font-family:sans-serif;
+  background:#0f172a;
+  color:#e5e7eb;
+  margin:0;
 }
 
-/* タイトル */
-h2{
-  margin-bottom:15px;
+h1{
+  font-size:18px;
+  margin:0;
+}
+h3{
+  margin-top:0;
+  font-size:15px;
+}
+/* ==============================
+■ レイアウト
+============================== */
+.container{
+  max-width:420px;
+  margin:auto;
+  padding:14px;
 }
 
-/* 入力エリア */
-input[type="file"]{
-  display:block;
+.box{
+  background:#1e293b;
+  padding:14px;
+  margin-bottom:14px;
+  border-radius:14px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.3);
+}
+
+.row{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+/* ==============================
+■ UI（タブ）
+============================== */
+.tabs{
+  display:flex;
   margin-bottom:10px;
 }
 
-/* ファイル選択UI強化 */
-input[type="file"]::file-selector-button{
-  padding:8px 14px;
+.tabs button{
+  flex:1;
+  padding:10px;
+  background:#1e293b;
   border:none;
-  background:#4a8cff;
-  color:white;
-  border-radius:6px;
-  cursor:pointer;
-}
-input[type="file"]::file-selector-button:hover{
-  background:#336fe0;
+  color:#aaa;
 }
 
-/* ボタン */
-button{
-  padding:10px 16px;
-  margin-top:10px;
+.tabs button.active{
+  background:#3b82f6;
+  color:#fff;
+  font-weight:bold;
+}
+/* ==============================
+■ UI（入力・ボタン）
+============================== */
+input, select{
+  flex:1;
+  padding:10px;
+  border-radius:10px;
   border:none;
-  background:#28a745;
+  background:#f1f5f9;
+  color:#000;
+}
+
+button{
+  padding:10px;
+  border-radius:10px;
+  background:#3b82f6;
   color:white;
-  border-radius:6px;
+  border:none;
+  font-weight:bold;
   cursor:pointer;
-  font-size:14px;
+  transition:0.2s;
 }
 
 button:hover{
-  background:#218838;
+  background:#2563eb;
 }
 
-/* OCRボタン青に */
-button:first-of-type{
-  background:#007bff;
-}
-button:first-of-type:hover{
-  background:#0069d9;
-}
-
-/* テーブル */
+/* ==============================
+■ テーブル
+============================== */
 table{
-  border-collapse: collapse;
-  margin-top:20px;
   width:100%;
-  max-width:600px;
-  background:white;
-  box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  border-collapse: collapse;
+  font-size:12px;
 }
 
-thead{
-  background:#f0f2f5;
+th{
+  background:#334155;
+  position: sticky;
+  top: 0;
 }
 
-td,th{
-  border:1px solid #ddd;
-  padding:8px 10px;
+td, th{
+  padding:6px;
+  border-bottom:1px solid #475569;
   text-align:center;
 }
 
-/* 入力欄 */
-td input{
+tr:nth-child(even){
+  background:#1e293b;
+}
+
+tr:nth-child(odd){
+  background:#0f172a;
+}
+
+/* 横スクロール */
+#tableWrap, #weekdayBest, #tableWrap2, #weekdayBest3{
+  overflow-x:auto;
+}
+#tableWrap3{
+  max-height: 40vh;   /* 画面の40% */
+  overflow-y: auto;
+}
+
+#weekdayBest td:first-child,
+#weekdayBest th:first-child {
+  white-space: nowrap;
+}
+/* ==============================
+■ ヘッダー
+============================== */
+.header-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.header-bar button {
+  position: absolute;
+  right: 0;
+}
+
+#manageBtn, #manageBtn2{
+  font-size:18px;
+  padding:6px 10px;
+}
+
+/* ==============================
+■ モーダル（共通）
+============================== */
+.modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
   width:100%;
-  max-width:100px;
-  padding:4px;
-  border:1px solid #ccc;
-  border-radius:4px;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  justify-content:center;
+  align-items:center;
 }
 
-/* 未入力強調 */
-td input:placeholder-shown{
-  border-color:red;
-  background:#fff5f5;
+.modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  justify-content:center;
+  align-items:center;
 }
 
-/* 日付 */
-#date{
-  margin-top:10px;
-  font-weight:bold;
-  font-size:16px;
-}
-
-/* デバッグ */
-#debug{
-  margin-top:20px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-
-#debug canvas{
-  border:2px solid #444;
-  max-width:300px;
+.modal-content{
+  background:#1e293b;
+  padding:20px;
+  border-radius:12px;
+  width:90%;
+  max-width:320px;
 }
 
 /* チェックボックス */
-label{
-  display:inline-flex;
-  align-items:center;
+#modalCheckboxes{
+  max-height:200px;
+  overflow-y:auto;
+  margin-bottom:10px;
+}
+
+#modalCheckboxes label{
+  display:flex;
   gap:6px;
-  cursor:pointer;
+  margin-bottom:6px;
+}
+
+/* ==============================
+■ グラフモーダル
+============================== */
+.graph-modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:#0f172a;
+  z-index:9999;
+}
+
+.graph-modal-content{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  padding:10px;
+}
+
+.graph-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 0;
+}
+
+#modalChart1{
+  width:100% !important;
+  height:60vh !important;
+}
+#modalChart2{
+  width:100% !important;
+  height:60vh !important;
+}
+#modalChart3{
+  width:100% !important;
+  height:40vh !important;
+}
+
+/* ==============================
+■ アコーディオン
+============================== */
+.accordion-title {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px;
+  background: #334155;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+/* ==============================
+■ ページ2（順位）
+============================== */
+.rank-table .clan-col {
+  font-size: 10px;
+  max-width: 40px;
+  white-space: nowrap;
+}
+
+.rank-table td:first-child,
+.rank-table th:first-child {
+  white-space: nowrap;
+}
+
+#tableWrap2 th {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: nowrap;
+}
+
+/* 平均順位 */
+#avgRankBox table {
+  width: 100%;
+  font-size: 13px;
+}
+
+#avgRankBox td {
+  padding: 6px;
+  border-bottom: 1px solid #475569;
+}
+
+/* 個人別最高スコア */
+#bestScoreBox td:first-child {
+  font-weight: bold;
+}
+
+/* 1位（順位セルだけ） */
+.rank1, .rank2, .rank3 {
+  font-weight: bold;
+}
+
+.rank1 {
+  color: #FFD700;
+  text-shadow: 0 0 6px rgba(255,215,0,0.7);
+}
+
+.rank2 {
+  color: #C0C0C0;
+  text-shadow: 0 0 6px rgba(192,192,192,0.7);
+}
+
+.rank3 {
+  color: #CD7F32;
+  text-shadow: 0 0 6px rgba(205,127,50,0.7);
 }
 
 /* OCR用 ファイル選択ボタン */
