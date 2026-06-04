@@ -1761,42 +1761,38 @@ async function readRow(canvas,y){
 }
 // OCR実行
 let ocrResultMap = {};
-
 window.runOCRMain = async function(){
-
+  // ローディング表示ON
+  document.getElementById("ocrLoading").style.display = "block";
   document.getElementById("debugMain").innerHTML="";
   document.getElementById("ocrResult").innerHTML="";
-
-  const img1 = await loadImage(document.getElementById("img1Main").files[0]);
-  const img2 = await loadImage(document.getElementById("img2Main").files[0]);
-
-  const imgs = [img1,img2];
-  const map = {};
-
-  for(const img of imgs){
-
-    const canvas = toCanvas(img);
-
-    if(isDebugMain()){
-      document.getElementById("debugMain").appendChild(canvas);
+  try {
+    const img1 = await loadImage(document.getElementById("img1Main").files[0]);
+    const img2 = await loadImage(document.getElementById("img2Main").files[0]);
+    const imgs = [img1,img2];
+    const map = {};
+    for(const img of imgs){
+      const canvas = toCanvas(img);
+      if(isDebugMain()){
+        document.getElementById("debugMain").appendChild(canvas);
+      }
+      for(const p of [TOP1,TOP2,TOP3]){
+        const r = await readTop(canvas,p);
+        if(r.name) map[r.name] = r.score ?? "";
+      }
+      for(const r of rowsOCR){
+        const row = await readRow(canvas,r.y);
+        if(row.name) map[row.name] = row.score ?? "";
+      }
     }
-
-    // 上位
-    for(const p of [TOP1,TOP2,TOP3]){
-      const r = await readTop(canvas,p);
-      if(r.name) map[r.name] = r.score ?? "";
-    }
-
-    // 下位
-    for(const r of rowsOCR){
-      const row = await readRow(canvas,r.y);
-      if(row.name) map[row.name] = row.score ?? "";
-    }
+    ocrResultMap = map;
+    renderOCRResultHigh();
+  } finally {
+    // ローディングOFF（超重要）
+    document.getElementById("ocrLoading").style.display = "none";
   }
-
-  ocrResultMap = map;
-  renderOCRResultHigh();
 };
+
 // 表示
 function renderOCRResultHigh(){
   let html = "<table><tr><th>クラン</th><th>スコア（修正可）</th></tr>";
