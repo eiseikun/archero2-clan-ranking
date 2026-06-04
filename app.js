@@ -1869,8 +1869,9 @@ window.saveOCRHigh = async function(){
 
   const inputs = document.querySelectorAll("#ocrResult input");
 
-  const date = document.getElementById("date").value;
-  if(!date) return alert("日付入れて");
+  const date = document.getElementById("ocrDate").value;
+if (!date) return alert("OCR用の日付を入れて");
+
 
   for(const input of inputs){
 
@@ -1907,3 +1908,8 @@ function toCanvas(img){
   c.getContext("2d").drawImage(img,0,0);
   return c;
 }
+// OCR折り畳み
+window.toggleOCRBox = function () {
+  const box = document.getElementById("ocrBox");
+  box.style.display = (box.style.display === "none") ? "block" : "none";
+};
