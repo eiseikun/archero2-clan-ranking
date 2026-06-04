@@ -1764,7 +1764,7 @@ async function readTop(canvas,pos,rank){
   const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH));
   return {name,score};
 }
-// 読み取り本体
+// 読み取り本体(4位以降の大きさ)
 async function readRow(canvas,y){
   drawRect(canvas.getContext("2d"),NAME_X,y,350,90,"green");
   drawRect(canvas.getContext("2d"),SCORE_X,y,200,90,"red");
