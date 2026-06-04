@@ -1891,3 +1891,19 @@ window.saveOCRHigh = async function(){
 
   alert("修正込みで保存完了 👍");
 };
+
+function loadImage(file){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>res(img);
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+function toCanvas(img){
+  const c=document.createElement("canvas");
+  c.width=img.width;
+  c.height=img.height;
+  c.getContext("2d").drawImage(img,0,0);
+  return c;
+}
