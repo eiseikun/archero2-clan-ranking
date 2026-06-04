@@ -2,369 +2,44 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>ランキング管理</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クランランキングOCR</title>
 
 <link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 
 <body>
-<div class="container">
 
-<!-- =============================
-  ■ 全体ヘッダー
-============================= -->
-<div class="header-bar">
-  <h1>🏆ランキング管理</h1>
+<h1>クランランキング OCR 試作版</h1>
+
+<div class="upload-box">
+    <label>画像①（1～10位付近）</label>
+    <input type="file" id="image1" accept="image/*">
+
+    <label>画像②（11位以降）</label>
+    <input type="file" id="image2" accept="image/*">
+
+    <button id="analyzeBtn">OCR実行</button>
 </div>
 
-<!-- =============================
-  ■ タブ
-============================= -->
-<div class="tabs">
-  <button id="tab1" class="active" onclick="showPage(1)">全体記録</button>
-  <button id="tab2" onclick="showPage(2)">ねこ海賊団</button>
-  <button id="tab3" onclick="showPage(3)">個人用</button>
-</div>
+<div id="status">待機中</div>
 
-<!-- =============================
-  ▼ ページ1：全体記録
-============================= -->
-<div id="page1">
+<table id="resultTable">
+    <thead>
+        <tr>
+            <th>クラン名</th>
+            <th>順位</th>
+            <th>スコア(T)</th>
+        </tr>
+    </thead>
 
-  <!-- ヘッダー -->
-  <div class="header-bar">
-    <h1>📊全体記録</h1>
-    <button onclick="toggleManage()" id="manageBtn">⚙️</button>
-  </div>
-
-  <!-- CSV管理 -->
- <div id="manageArea" class="box" style="display:none;">
-  <input type="file" id="csvFile">
-  <div class="row">
-    <button onclick="importCSV()">CSV取込</button>
-    <button onclick="exportCSV()">CSV出力</button>
-  </div>
-  <!-- 画像 -->
-  <div class="row">
-    <button onclick="saveWeekdayBestImage()">📸 曜日別画像保存</button>
-  </div>
-   <hr>
-<h3>📷 OCR自動取込</h3>
-
-<input type="file" id="ocrImage" accept="image/*">
-
-<div class="row">
-  <button onclick="runOCR()">画像から自動入力</button>
-</div>
-</div>
-  
-  
-  <!-- データ追加 -->
-  <div class="box">
-    <h3>➕ データ追加</h3>
-    <div class="row"><select id="clan"></select></div>
-    <div class="row"><input id="score" type="number" placeholder="スコア"></div>
-    <div class="row"><input id="date" type="date"></div>
-    <div class="row"><button onclick="add()">追加</button></div>
-  </div>
-  
-  <div class="box" id="weekdayCapture">
-    <h3>🏆 曜日別最高スコア</h3>
-    <div id="weekdayBest"></div>
-  </div>
-
-  <!-- グラフ -->
-  <div class="box">
-    <h3 class="accordion-title" onclick="toggleGraphBox()">📈 グラフ生成</h3>
-
-    <div id="graphBox" style="display:none;">
-      <div class="row">
-        <input type="date" id="startDate">
-        <input type="date" id="endDate">
-      </div>
-
-      <div class="row">
-        <button onclick="openModal()">クラン選択</button>
-        <span id="selectedClansText">未選択</span>
-      </div>
-
-      <div class="row">
-        <select id="graphMode">
-          <option value="score">スコア推移</option>
-          <option value="rank">順位推移</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <button onclick="drawChart()">グラフ生成</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 一覧 -->
-  <div class="box">
-    <h3>📊 一覧</h3>
-    <div id="tableWrap"></div>
-  </div>
-
-</div>
-
-<!-- =============================
-  ▼ ページ2：ねこ海賊団
-============================= -->
-<div id="page2" style="display:none">
-
-  <div class="header-bar">
-    <h1>📊ねこ海賊団</h1>
-    <button onclick="toggleManage2()" id="manageBtn2">⚙️</button>
-  </div>
-
-  <!-- CSV -->
-  <div id="manageArea2" class="box" style="display:none;">
-    <input type="file" id="csvFile2">
-    <div class="row">
-      <button onclick="importCSV2()">CSV取込</button>
-      <button onclick="exportCSV2()">CSV出力</button>
-    </div>
-    <div class="row">
-      <button onclick="saveBestScoreImage()">📸 最高スコア</button>
-      <button onclick="saveAvgRankImage()">📸 平均順位</button>
-    </div>
-  </div>
-
-  <!-- 順位追加 -->
-  <div class="box">
-    <h3>➕ 順位データ追加</h3>
-    <div class="row">
-      <select id="member"></select>
-      <input id="newMember" placeholder="新規メンバー（いなければ）">
-    </div>
-    <div class="row"><input id="rank" type="number" placeholder="順位"></div>
-    <div class="row">
-      <input id="score2" type="number" placeholder="スコア(任意)">
-    </div>
-    <div class="row"><input id="date2" type="date"></div>
-    <div class="row"><button onclick="addRank()">追加</button></div>
-  </div>
-  
-  <!-- 平均順位 -->
-<div class="box" id="avgRankCapture">
-  <h3>📊 平均順位</h3>
-
-  <div class="row">
-    <input type="date" id="startDateRank">
-    <input type="date" id="endDateRank">
-  </div>
-
-  <div class="row">
-    <button onclick="applyAvgRank()">反映</button>
-  </div>
-
-  <div id="avgRankBox"></div>
-</div>
-
-<!-- 順位推移グラフ -->
-<div class="box">
-  <h3 class="accordion-title" onclick="toggleRankGraphBox()">
-    📈 順位推移グラフ
-  </h3>
-  <div id="rankGraphBox" style="display:none;">
-    <div class="row">
-      <input type="date" id="rankGraphStart">
-      <input type="date" id="rankGraphEnd">
-    </div>
-    <div class="row">
-      <button onclick="openMemberModal()">
-        メンバー選択
-      </button>
-      <span id="selectedMembersText">
-        未選択
-      </span>
-    </div>
-    <div class="row">
-      <button onclick="drawRankGraph()">
-        グラフ生成
-      </button>
-    </div>
-  </div>
-</div>
-  
-  <!-- 個人別最高スコア -->
-  <div class="box" id="bestScoreCapture">
-    <h3>☠個人別最高スコア☠</h3>
-    <div id="bestScoreBox"></div>
-  </div>
-  
-  <!-- 一覧 -->
-  <div class="box">
-    <h3>📋 順位一覧</h3>
-    <div id="tableWrap2"></div>
-  </div>
-
-</div>
-
-<!-- =============================
-  ▼ ページ3：個人用
-============================= -->
-<div id="page3" style="display:none">
-
-  <div class="header-bar">
-    <h1>👤個人記録</h1>
-    <button onclick="toggleManage3()" id="manageBtn3">⚙️</button>
-  </div>
-
-  <!-- CSV -->
-  <div id="manageArea3" class="box" style="display:none;">
-    <input type="file" id="csvFile3">
-    <div class="row">
-      <button onclick="importCSV3()">CSV取込</button>
-      <button onclick="exportCSV3()">CSV出力</button>
-    </div>
-    <div class="row">
-      <button onclick="saveWeekdayBestImage3()">📸 画像保存</button>
-    </div>
-  </div>
-
-  <!-- データ追加 -->
-  <div class="box">
-    <h3>➕ データ追加</h3>
-    <div class="row">
-      <input id="score3" type="number" placeholder="2回合計スコア">
-      <input id="score3_1" type="number" placeholder="1回スコア（任意）">
-    </div>
-    <div class="row"><input id="date3" type="date"></div>
-    <div class="row"><button onclick="add3()">追加</button></div>
-  </div>
-
-  <!-- 曜日別 -->
-  <div class="box" id="weekdayCapture3">
-    <h3>🏆 曜日別最高スコア</h3>
-    <div id="weekdayBest3"></div>
-  </div>
-
-  <!-- グラフ -->
-  <div class="box">
-    <h3 class="accordion-title" onclick="toggleGraphBox3()">📈 グラフ生成</h3>
-
-    <div id="graphBox3" style="display:none;">
-      <div class="row">
-        <input type="date" id="startDate3">
-        <input type="date" id="endDate3">
-      </div>
-
-      <div class="row">
-        <label><input type="checkbox" value="0">日</label>
-        <label><input type="checkbox" value="1">月</label>
-        <label><input type="checkbox" value="2">火</label>
-        <label><input type="checkbox" value="3">水</label>
-        <label><input type="checkbox" value="4">木</label>
-        <label><input type="checkbox" value="5">金</label>
-        <label><input type="checkbox" value="6">土</label>
-        <label><input type="checkbox" id="allDays">全選択</label>
-      </div>
-
-      <div class="row">
-        <button onclick="drawChart3()">グラフ生成</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 一覧 -->
-  <div class="box">
-    <h3>📊 一覧</h3>
-    <div id="tableWrap3"></div>
-  </div>
-
-</div>
-
-
-<!-- =============================
-  ■ モーダル
-============================= -->
-<div id="modal" class="modal">
-  <div class="modal-content">
-    <h3>クラン選択</h3>
-    <div id="modalCheckboxes"></div>
-
-    <div class="row">
-      <button onclick="selectAllClans()">全選択</button>
-      <button onclick="clearAllClans()">全解除</button>
-    </div>
-
-    <div class="row">
-      <button onclick="applySelection()">決定</button>
-      <button onclick="closeModal()">閉じる</button>
-    </div>
-  </div>
-</div>
-
-<!-- グラフモーダル -->
-<div id="graphModal1" class="graph-modal">
-  <div class="graph-modal-content">
-    <div class="graph-header">
-      <h3>📊 グラフ表示（全体）</h3>
-      <button onclick="closeGraphModal1()">閉じる</button>
-    </div>
-    <canvas id="modalChart1"></canvas>
-  </div>
-</div>
-  
-<!-- メンバー選択モーダル -->
-<div id="memberModal" class="modal">
-  <div class="modal-content">
-    <h3>メンバー選択</h3>
-    <div id="memberModalCheckboxes"></div>
-    <div class="row">
-      <button onclick="selectAllMembers()">
-        全選択
-      </button>
-      <button onclick="clearAllMembers()">
-        全解除
-      </button>
-    </div>
-    <div class="row">
-      <button onclick="applyMemberSelection()">
-        決定
-      </button>
-      <button onclick="closeMemberModal()">
-        閉じる
-      </button>
-    </div>
-  </div>
-</div>
-  
-<!-- 2ページ目用 -->
-<div id="graphModal2" class="graph-modal">
-  <div class="graph-modal-content">
-
-    <div class="graph-header">
-      <h3>📊 グラフ表示（順位推移）</h3>
-
-      <button onclick="closeGraphModal2()">
-        閉じる
-      </button>
-    </div>
-
-    <canvas id="modalChart2"></canvas>
-
-  </div>
-</div>
-  
-<!-- 3ページ目用 -->
-<div id="graphModal3" class="graph-modal">
-  <div class="graph-modal-content">
-    <div class="graph-header">
-      <h3>📊 グラフ表示（個人）</h3>
-      <button onclick="closeGraphModal3()">閉じる</button>
-    </div>
-    <canvas id="modalChart3"></canvas>
-  </div>
-</div>
+    <tbody id="tbody">
+    </tbody>
+</table>
 
 <script type="module" src="app.js"></script>
+
 </body>
 </html>
