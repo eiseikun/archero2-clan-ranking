@@ -14,41 +14,51 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // =============================
-// 設定
+// クラン一覧（固定）
 // =============================
-const DEBUG = true;
+const clans = [
+  "魔導特務隊","最狂会","IgnisFloris","ポケポケ会",
+  "PopoWarren","やまだ家","ねこ海賊団","たまねぎ班",
+  "猫の旅","天狼の戦弓団","アチャ伝"
+];
 
+// =============================
 const SCORE_X = 760;
 const SCORE_W = 350;
 const SCORE_H = 95;
 
-const rows_img1 = [
-  { clan:"ポケポケ会", y:1050 },
-  { clan:"PopoWarren", y:1200 },
-  { clan:"やまだ家", y:1350 },
-  { clan:"ねこ海賊団", y:1500 },
-  { clan:"たまねぎ班", y:1650 },
-  { clan:"アチャ伝", y:1800 },
-  { clan:"猫の旅", y:1950 }
-];
-
-const rows_img2 = [
-  { clan:"天狼の戦弓団", y:1050 }
-];
-
-const top3 = [
-  { clan:"最狂会", x:150, y:550 },
-  { clan:"魔導特務隊", x:470, y:500 },
-  { clan:"IgnisFloris", x:800, y:550 }
+const rows = [
+  { y:1050 },
+  { y:1200 },
+  { y:1350 },
+  { y:1500 },
+  { y:1650 },
+  { y:1800 },
+  { y:1950 }
 ];
 
 // =============================
-// デバッグ描画
+function isDebug(){
+  return document.getElementById("debugToggle")?.checked;
+}
+
+// =============================
+// 描画
 // =============================
 function drawRect(ctx,x,y,w,h,color="red"){
   ctx.strokeStyle=color;
   ctx.lineWidth=3;
   ctx.strokeRect(x,y,w,h);
+}
+
+function drawCross(ctx,x,y){
+  ctx.strokeStyle="red";
+  ctx.beginPath();
+  ctx.moveTo(x-10,y);
+  ctx.lineTo(x+10,y);
+  ctx.moveTo(x,y-10);
+  ctx.lineTo(x,y+10);
+  ctx.stroke();
 }
 
 // =============================
@@ -58,26 +68,23 @@ function adjustY(canvas, baseY){
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
 
-  for(let offset=-30; offset<=30; offset++){
-    const y = baseY + offset;
-
+  for(let o=-30;o<=30;o++){
+    const y = baseY + o;
     const row = ctx.getImageData(0,y,w,1).data;
 
     let sum=0;
     for(let i=0;i<row.length;i+=4){
-      sum += row[i];
+      sum+=row[i];
     }
 
-    const avg = sum / w;
-
-    if(avg > 140) return y;
+    if(sum/w > 140) return y;
   }
 
   return baseY;
 }
 
 // =============================
-// 前処理
+// OCR系
 // =============================
 function preprocess(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
@@ -96,54 +103,59 @@ function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
   c.width = w*2;
   c.height = h*2;
-  const ctx = c.getContext("2d");
 
+  const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
   preprocess(ctx,w*2,h*2);
 
-  if(DEBUG){
+  if(isDebug()){
     document.getElementById("debug").appendChild(c);
   }
 
   return c;
 }
 
-// =============================
-// OCR後補正
-// =============================
 function normalize(text){
-  text = text
-    .replace(/[^\d.]/g,"")
-    .replace("..",".");
-
-  const num = parseFloat(text);
-  if(!num) return null;
-
-  return num;
+  text = text.replace(/[^\d.]/g,"");
+  return parseFloat(text);
 }
 
-function correct(score){
-  if(!score) return null;
-
-  if(score > 1000) score /= 10;
-  if(score < 1) score *= 10;
-
-  return score;
-}
-
-// =============================
-// OCR
-// =============================
 async function readScore(canvas){
-
   const res = await Tesseract.recognize(canvas,"eng",{
     tessedit_char_whitelist:"0123456789."
   });
+  return normalize(res.data.text);
+}
 
-  const a = normalize(res.data.text);
-  const b = normalize(res.data.text); // 再評価
+async function readName(canvas){
+  const res = await Tesseract.recognize(canvas,"jpn");
+  return res.data.text.replace(/\s/g,"");
+}
 
-  return correct(b || a);
+// =============================
+// クランマッチ
+// =============================
+function matchClan(text){
+  for(const c of clans){
+    if(text.includes(c)) return c;
+  }
+  return null;
+}
+
+// =============================
+// 行読み取り
+// =============================
+async function readRow(canvas,y){
+
+  const nameCrop = crop(canvas,200,y,400,90);
+  const scoreCrop = crop(canvas,SCORE_X,y,SCORE_W,SCORE_H);
+
+  const nameRaw = await readName(nameCrop);
+  const score = await readScore(scoreCrop);
+
+  const name = matchClan(nameRaw);
+
+  return {name,score};
 }
 
 // =============================
@@ -153,90 +165,67 @@ window.runOCR = async function(){
 
   document.getElementById("debug").innerHTML="";
 
-  const file1 = document.getElementById("img1").files[0];
-  const file2 = document.getElementById("img2").files[0];
+  const img1 = await loadImage(document.getElementById("img1").files[0]);
+  const img2 = await loadImage(document.getElementById("img2").files[0]);
 
-  const img1 = await loadImage(file1);
-  const img2 = await loadImage(file2);
+  const all = [];
 
-  let result = {};
+  for(const img of [img1,img2]){
 
-  result = { ...result, ...(await processTop3(img1)) };
-  result = { ...result, ...(await process(img1, rows_img1)) };
-  result = { ...result, ...(await process(img2, rows_img2)) };
+    const canvas = toCanvas(img);
+    const ctx = canvas.getContext("2d");
 
-  const sorted = Object.entries(result)
+    if(isDebug()){
+      document.getElementById("debug").appendChild(canvas);
+    }
+
+    // クリック取得
+    canvas.onclick = (e)=>{
+      if(!isDebug()) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor(e.clientX - rect.left);
+      const y = Math.floor(e.clientY - rect.top);
+
+      console.log(`x:${x}, y:${y}`);
+      drawCross(ctx,x,y);
+    };
+
+    for(const r of rows){
+
+      const y = adjustY(canvas,r.y);
+
+      if(isDebug()){
+        drawRect(ctx,200,y,400,90,"green");
+        drawRect(ctx,SCORE_X,y,SCORE_W,SCORE_H,"red");
+      }
+
+      const row = await readRow(canvas,y);
+
+      if(row.name && row.score){
+        all.push(row);
+      }
+    }
+  }
+
+  // 重複除去
+  const map = {};
+  for(const r of all){
+    map[r.name] = r.score;
+  }
+
+  // 順位計算
+  const sorted = Object.entries(map)
     .sort((a,b)=>b[1]-a[1]);
 
   const records = {};
-
   sorted.forEach(([name,score],i)=>{
-    records[name] = {
-      rank:i+1,
-      score
-    };
+    records[name] = {rank:i+1,score};
   });
 
   render(records);
-}
+};
 
-// =============================
-async function process(img,rows){
-
-  const canvas = toCanvas(img);
-  const ctx = canvas.getContext("2d");
-
-  if(DEBUG){
-    document.getElementById("debug").appendChild(canvas);
-  }
-
-  const res = {};
-
-  for(const r of rows){
-
-    const y = adjustY(canvas, r.y);
-
-    if(DEBUG){
-      drawRect(ctx, SCORE_X, y, SCORE_W, SCORE_H, "red");
-    }
-
-    const c = crop(canvas, SCORE_X, y, SCORE_W, SCORE_H);
-    const raw = await readScore(c);
-
-    res[r.clan] = raw;
-  }
-
-  return res;
-}
-
-async function processTop3(img){
-
-  const canvas = toCanvas(img);
-  const ctx = canvas.getContext("2d");
-
-  if(DEBUG){
-    document.getElementById("debug").appendChild(canvas);
-  }
-
-  const res = {};
-
-  for(const t of top3){
-
-    if(DEBUG){
-      drawRect(ctx, t.x, t.y, 260, 100, "blue");
-    }
-
-    const c = crop(canvas, t.x, t.y, 260, 100);
-    const raw = await readScore(c);
-
-    res[t.clan] = raw;
-  }
-
-  return res;
-}
-
-// =============================
-// 表示
 // =============================
 function render(records){
 
@@ -263,8 +252,6 @@ function render(records){
 }
 
 // =============================
-// 保存
-// =============================
 window.save = async function(){
 
   const rows = document.querySelectorAll("#table tbody tr");
@@ -288,7 +275,7 @@ window.save = async function(){
   });
 
   alert("保存完了");
-}
+};
 
 // =============================
 function loadImage(file){
