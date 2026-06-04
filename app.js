@@ -226,3 +226,100 @@ window.runOCR = async function(){
     // 上位
     const topList = [
       { ...TOP1, type:1 },
+      { ...TOP2, type:2 },
+      { ...TOP3, type:2 }
+    ];
+
+    for(const p of topList){
+      const r = await readTop(canvas,p,p.type);
+      if(r.name) map[r.name] = r.score ?? "";
+    }
+
+    // 下位
+    for(const r of rows){
+      const row = await readRow(canvas,r.y);
+      if(row.name) map[row.name] = row.score ?? "";
+    }
+  }
+
+  renderEditable(map);
+};
+
+/* =============================
+ ★ 手入力対応テーブル
+============================= */
+function renderEditable(map){
+
+  const tbody = document.querySelector("#table tbody");
+  tbody.innerHTML="";
+
+  clans.forEach(name=>{
+
+    const tr = document.createElement("tr");
+
+    const score = map[name] ?? "";
+
+    tr.innerHTML = `
+      <td>${name}</td>
+      <td>-</td>
+      <td><input value="${score}" placeholder="未取得"></td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+/* =============================
+ 保存（順位再計算）
+============================= */
+window.save = async function(){
+
+  const rows = document.querySelectorAll("#table tbody tr");
+
+  const data = [];
+
+  rows.forEach(tr=>{
+    const name = tr.children[0].innerText;
+    const score = parseFloat(tr.children[2].querySelector("input").value);
+
+    if(score) data.push({name,score});
+  });
+
+  // 順位再計算
+  data.sort((a,b)=>b.score-a.score);
+
+  const records={};
+  data.forEach((r,i)=>{
+    records[r.name]={rank:i+1,score:r.score};
+  });
+
+  const d = new Date();
+  const id = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+
+  await setDoc(doc(db,"rankings",id),{
+    date:id,
+    updatedAt:Date.now(),
+    records
+  });
+
+  alert("保存完了");
+};
+
+/* =============================
+ util
+============================= */
+function loadImage(file){
+  return new Promise(r=>{
+    const img = new Image();
+    img.onload=()=>r(img);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function toCanvas(img){
+  const c=document.createElement("canvas");
+  c.width=img.width;
+  c.height=img.height;
+  c.getContext("2d").drawImage(img,0,0);
+  return c;
+}
