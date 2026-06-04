@@ -22,7 +22,7 @@ const clans = [
 ];
 
 /* =============================
- 座標（調整用）
+ 座標
 ============================= */
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
 const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
@@ -37,6 +37,24 @@ const NAME_X = 440;
 const SCORE_X = 895;
 
 /* =============================
+ デバッグ
+============================= */
+function isDebug(){
+  return document.getElementById("debugToggle")?.checked;
+}
+
+/* =============================
+ 描画
+============================= */
+function drawRect(ctx,x,y,w,h,color){
+  if(!isDebug()) return;
+
+  ctx.strokeStyle=color;
+  ctx.lineWidth=3;
+  ctx.strokeRect(x,y,w,h);
+}
+
+/* =============================
  OCR補助
 ============================= */
 function preprocess(ctx,w,h){
@@ -48,11 +66,11 @@ function preprocess(ctx,w,h){
     const v = gray>150?255:0;
     d[i]=d[i+1]=d[i+2]=v;
   }
-
   ctx.putImageData(img,0,0);
 }
 
 function crop(canvas,x,y,w,h){
+
   const c = document.createElement("canvas");
   c.width = w*2;
   c.height = h*2;
@@ -61,29 +79,34 @@ function crop(canvas,x,y,w,h){
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
   preprocess(ctx,w*2,h*2);
 
+  // ✅ デバッグ表示復活
+  if(isDebug()){
+    document.getElementById("debug").appendChild(c);
+  }
+
   return c;
 }
 
 /* =============================
- スコア（超重要）
+ スコア補正（完全版）
 ============================= */
 function normalizeScore(text){
 
-  // T削除
-  text = text.replace("T","");
+  text = text
+    .replace("T","")
+    .replace(/[^\d.]/g,"");
 
-  // 数値だけ
-  const match = text.match(/[0-9]+\.[0-9]+/);
-
+  // ✅ 正しい形式のみ抽出
+  const match = text.match(/\d+\.\d{1,3}/);
   if(!match) return null;
 
   let num = parseFloat(match[0]);
 
-  // 小数2桁固定
-  num = Math.round(num*100)/100;
+  // ✅ 異常値除去
+  if(num < 1 || num > 600) return null;
 
-  // 異常値修正
-  if(num > 1000) num /= 10;
+  // ✅ 小数2桁固定
+  num = Math.round(num * 100) / 100;
 
   return num;
 }
@@ -104,7 +127,7 @@ async function readScore(canvas){
 }
 
 /* =============================
- 名前OCR
+ 名前
 ============================= */
 async function readName(canvas){
   const res = await Tesseract.recognize(canvas,"jpn");
@@ -123,15 +146,16 @@ function levenshtein(a,b){
     for(let j=1;j<=a.length;j++){
       m[i][j] = b[i-1]===a[j-1]
         ? m[i-1][j-1]
-        : Math.min(m[i-1][j-1]+1,m[i][j-1]+1,m[i-1][j]+1);
+        : Math.min(
+            m[i-1][j-1]+1,
+            m[i][j-1]+1,
+            m[i-1][j]+1
+          );
     }
   }
   return m[b.length][a.length];
 }
 
-/* =============================
- クラン判定（100%化）
-============================= */
 function matchClan(text){
 
   text = text.replace(/\s/g,"");
@@ -154,14 +178,34 @@ function matchClan(text){
  読み取り
 ============================= */
 async function readTop(canvas,pos){
-  const name = matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,250,70)));
-  const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,200,80));
+
+  drawRect(canvas.getContext("2d"),pos.nameX,pos.nameY,250,70,"green");
+  drawRect(canvas.getContext("2d"),pos.scoreX,pos.scoreY,200,80,"blue");
+
+  const name = matchClan(await readName(
+    crop(canvas,pos.nameX,pos.nameY,250,70)
+  ));
+
+  const score = await readScore(
+    crop(canvas,pos.scoreX,pos.scoreY,200,80)
+  );
+
   return {name,score};
 }
 
 async function readRow(canvas,y){
-  const name = matchClan(await readName(crop(canvas,NAME_X,y,350,90)));
-  const score = await readScore(crop(canvas,SCORE_X,y,200,90));
+
+  drawRect(canvas.getContext("2d"),NAME_X,y,350,90,"green");
+  drawRect(canvas.getContext("2d"),SCORE_X,y,200,90,"red");
+
+  const name = matchClan(await readName(
+    crop(canvas,NAME_X,y,350,90)
+  ));
+
+  const score = await readScore(
+    crop(canvas,SCORE_X,y,200,90)
+  );
+
   return {name,score};
 }
 
@@ -182,6 +226,11 @@ window.runOCR = async function(){
   for(const img of imgs){
 
     const canvas = toCanvas(img);
+
+    // ✅ 元画像も表示
+    if(isDebug()){
+      document.getElementById("debug").appendChild(canvas);
+    }
 
     // 上位
     for(const p of [TOP1,TOP2,TOP3]){
@@ -204,7 +253,7 @@ window.runOCR = async function(){
 };
 
 /* =============================
- 手入力テーブル（重要）
+ 表示（手入力対応）
 ============================= */
 function renderEditable(map){
 
@@ -215,9 +264,8 @@ function renderEditable(map){
 
     const raw = map[name];
 
-    const scoreStr = (raw !== "" && raw !== null)
-      ? Number(raw).toFixed(2)
-      : "";
+    // ✅ ここで小数2桁固定
+    const scoreStr = raw ? Number(raw).toFixed(2) : "";
 
     const tr = document.createElement("tr");
 
@@ -225,10 +273,7 @@ function renderEditable(map){
       <td>${name}</td>
       <td>-</td>
       <td>
-        <input 
-          value="${scoreStr}" 
-          placeholder="未取得"
-        >
+        <input value="${scoreStr}" placeholder="未取得">
       </td>
     `;
 
@@ -257,7 +302,6 @@ window.save = async function(){
     }
   });
 
-  // 順位計算
   data.sort((a,b)=>b.score-a.score);
 
   const records={};
