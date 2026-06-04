@@ -342,3 +342,117 @@ function toCanvas(img){
   c.getContext("2d").drawImage(img,0,0);
   return c;
 }
+
+/* =============================
+ OCR
+============================= */
+let ocrData = {}; // OCR結果保存
+function isDebugMain(){
+  return document.getElementById("debugToggleMain")?.checked;
+}
+
+function loadImage(file){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>res(img);
+    img.src=URL.createObjectURL(file);
+  });
+}
+function toCanvas(img){
+  const c=document.createElement("canvas");
+  c.width=img.width;
+  c.height=img.height;
+  c.getContext("2d").drawImage(img,0,0);
+  return c;
+}
+window.runOCRMain = async function(){
+
+  document.getElementById("debugMain").innerHTML = "";
+  document.getElementById("ocrResult").innerHTML = "";
+
+  const img1 = document.getElementById("img1Main").files[0];
+  const img2 = document.getElementById("img2Main").files[0];
+
+  if(!img1 || !img2){
+    return alert("画像2枚選んでください");
+  }
+
+  const imgs = [
+    await loadImage(img1),
+    await loadImage(img2)
+  ];
+
+  const map = {};
+
+  for(const img of imgs){
+
+    const canvas = toCanvas(img);
+
+    if(isDebugMain()){
+      document.getElementById("debugMain").appendChild(canvas);
+    }
+
+    // OCR
+    const result = await Tesseract.recognize(canvas,"eng+jpn");
+
+    const text = result.data.text;
+
+    // 🔥 簡易解析（ここ重要）
+    text.split("\n").forEach(line=>{
+      const clean = line.trim();
+
+      const clan = activeClans.find(c=>clean.includes(c));
+
+      const scoreMatch = clean.match(/\d+\.\d+/);
+
+      if(clan && scoreMatch){
+        map[clan] = Number(scoreMatch[0]);
+      }
+    });
+  }
+
+  ocrData = map;
+
+  renderOCRResult();
+};
+function renderOCRResult(){
+
+  let html = "<table><tr><th>クラン</th><th>スコア</th></tr>";
+
+  Object.entries(ocrData).forEach(([clan,score])=>{
+    html += `<tr>
+      <td>${clan}</td>
+      <td>${score}</td>
+    </tr>`;
+  });
+
+  html += "</table>";
+
+  document.getElementById("ocrResult").innerHTML = html;
+}
+window.saveOCRToScores = async function(){
+
+  if(!Object.keys(ocrData).length){
+    return alert("先にOCR実行して");
+  }
+
+  const date = document.getElementById("date").value;
+  if(!date) return alert("日付入れて");
+
+  for(const clan in ocrData){
+
+    const scoreT = ocrData[clan];
+    const scoreB = scoreT * 1000; // 統一
+
+    const docId = `${date}_${clan}`;
+
+    await setDoc(doc(db,"scores",docId),{
+      clan,
+      score: scoreB,
+      date,
+      time: Date.now()
+    });
+  }
+
+  alert("保存完了！");
+};
