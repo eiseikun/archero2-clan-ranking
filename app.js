@@ -116,6 +116,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       });
   });
+});
 
 // ==============================
 // ■ ページ切替
