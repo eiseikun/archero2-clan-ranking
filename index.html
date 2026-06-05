@@ -161,6 +161,31 @@
     </div>
   </div>
 
+  <div class="box">
+  <h3 class="accordion-title" onclick="toggleOCRBox2()">📷 OCR読取</h3>
+  <div id="ocrBox2" style="display:none;">
+    <label>
+      <input type="checkbox" id="debugToggle2">
+      デバッグ
+    </label>
+    <div class="row column">
+      <input type="file" id="img1_2">
+      <input type="file" id="img2_2">
+    </div>
+    <div class="row">
+      <input type="date" id="ocrDate2">
+    </div>
+
+    <div class="row">
+      <button onclick="runOCR2()">OCR解析</button>
+      <button onclick="saveOCR2()">保存</button>
+    </div>
+
+    <div id="ocrResult2"></div>
+    <div id="ocrLoading2" style="display:none;">⏳ OCR解析中...</div>
+    <div id="debug2"></div>
+  </div>
+</div>
   <!-- 順位追加 -->
   <div class="box">
     <h3>➕ 順位データ追加</h3>
