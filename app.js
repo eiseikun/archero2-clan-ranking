@@ -1685,14 +1685,14 @@ function preprocessScore(ctx,w,h){
 
 function crop(canvas,x,y,w,h,isScore=false){
   const c = document.createElement("canvas");
-  c.width = w*2;
-  c.height = h*2;
+  c.width = w * 2;
+  c.height = h * 2;
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
   if(isScore){
-    preprocessScore(ctx,c.width,c.height); // ←戻す
+    preprocessScore(ctx,c.width,c.height);
   }else{
-    preprocess(ctx,c.width,c.height); // 名前は白黒OK
+    preprocess(ctx,c.width,c.height);
   }
   return c;
 }
@@ -1700,9 +1700,7 @@ function crop(canvas,x,y,w,h,isScore=false){
 // スコア補正
 function normalizeScore(text){
   if(!text) return null;
-  // T消す
   text = text.replace(/T/gi,"");
-  // よくある誤認識補正（重要）
   text = text
     .replace(/O/g,"0")
     .replace(/o/g,"0")
@@ -1710,45 +1708,25 @@ function normalizeScore(text){
     .replace(/l/g,"1")
     .replace(/,/g,".")
     .replace(/、/g,".");
-  // 数字と小数点だけ残す
   text = text.replace(/[^\d.]/g,"");
-  // 小数点複数対策
-  const parts = text.split(".");
-  if(parts.length > 2){
-    text = parts[0] + "." + parts.slice(1).join("");
-  }
+  if(!text) return null;
   let num = parseFloat(text);
   if(isNaN(num)) return null;
-  // 異常値補正
-  if(num < 10) return null;
-  // 強制2桁
+  // 🔥ここゆるく
+  if(num < 1) return null;
+  if(num > 600) return null;
   return parseFloat(num.toFixed(2));
 }
 
+
 async function readScore(canvas){
-  const results = [];
-  for(let i=0;i<3;i++){
-    const r = await Tesseract.recognize(canvas, "eng", {
-      tessedit_char_whitelist: "0123456789.",
-    });
-    const v = normalizeScore(r.data.text);
-    if(v) results.push(v);
-  }
-  if(results.length === 0) return null;
-  //  最頻値計算
-  const count = {};
-  results.forEach(v=>{
-    count[v] = (count[v] || 0) + 1;
-  });
-  let best = null;
-  let max = 0;
-  for(const k in count){
-    if(count[k] > max){
-      max = count[k];
-      best = Number(k);
-    }
-  }
-  return best;
+  const r1 = await Tesseract.recognize(canvas,"eng");
+  const r2 = await Tesseract.recognize(canvas,"eng");
+
+  const s1 = normalizeScore(r1.data.text);
+  const s2 = normalizeScore(r2.data.text);
+
+  return s1 || s2;
 }
 
 
@@ -1793,6 +1771,7 @@ function matchClan(text){
   }
   // 多少ズレても採用
   if(min <= 5) return best;
+  if(text.length <= 2) return null;
   return null;
 }
 
@@ -1880,9 +1859,9 @@ window.runOCRMain = async function(){
   }
 };
 
-// 表示
 function renderOCRResultHigh(){
   let html = "<table><tr><th>クラン</th><th>スコア（修正可）</th></tr>";
+  // ▼ 通常クラン表示
   for(const c of activeClans){
     const val = ocrResultMap[c];
     html += `<tr>
@@ -1896,6 +1875,15 @@ function renderOCRResultHigh(){
         >
       </td>
     </tr>`;
+  }
+  // UNKNOWN表示
+  for(const key in ocrResultMap){
+    if(key.includes("UNKNOWN")){
+      html += `<tr style="background:#300">
+        <td>${key}</td>
+        <td>${ocrResultMap[key]}</td>
+      </tr>`;
+    }
   }
   html += "</table>";
   document.getElementById("ocrResult").innerHTML = html;
