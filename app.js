@@ -1647,6 +1647,19 @@ function drawRect(ctx,x,y,w,h,color){
   ctx.strokeRect(x,y,w,h);
 }
 
+function preprocess(ctx,w,h){
+  const img = ctx.getImageData(0,0,w,h);
+  const d = img.data;
+
+  for(let i=0;i<d.length;i+=4){
+    const gray = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
+    const v = gray > 150 ? 255 : 0;
+    d[i]=d[i+1]=d[i+2]=v;
+  }
+
+  ctx.putImageData(img,0,0);
+}
+
 function preprocessScore(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
   const d = img.data;
@@ -1678,6 +1691,7 @@ function crop(canvas,x,y,w,h,isScore=false){
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
 
+  // ✅ 分岐させる（これ重要）
   if(isScore){
     preprocessScore(ctx,c.width,c.height);
   }else{
@@ -1786,17 +1800,28 @@ async function readTop(canvas,pos,rank){
   }// 3位の大きさ
   drawRect(canvas.getContext("2d"), pos.nameX, pos.nameY, nameW, nameH, "green");
   drawRect(canvas.getContext("2d"), pos.scoreX, pos.scoreY, scoreW, scoreH, "blue");
-  const name = matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH)));
-  const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH));
+  const name = matchClan(
+    await readName(
+      crop(canvas,pos.nameX,pos.nameY,nameW,nameH,false) // ← false追加
+      )
+  );
+  const score = await readScore(
+    crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,true) // ← true追加
+    );
   return {name,score};
 }
 // 読み取り本体(4位以降の大きさ)
 async function readRow(canvas,y){
   drawRect(canvas.getContext("2d"),NAME_X,y,350,90,"green");
   drawRect(canvas.getContext("2d"),SCORE_X,y,200,90,"red");
-  const name = matchClan(await readName(crop(canvas,NAME_X,y,350,90)));
-  const score = await readScore(crop(canvas,SCORE_X,y,200,90));
-
+  const name = matchClan(
+  await readName(
+    crop(canvas,NAME_X,y,350,90,false) // ← false
+    )
+  );
+  const score = await readScore(
+    crop(canvas,SCORE_X,y,200,90,true) // ← true
+    );
   return {name,score};
 }
 // OCR実行
