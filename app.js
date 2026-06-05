@@ -1625,7 +1625,7 @@ window.drawChart3 = function () {
 const ocrClans = activeClans;
 // 座標
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
-const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
+const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:710 };
 const TOP3 = { nameX:850, nameY:670, scoreX:920, scoreY:730 };
 
 const rowsOCR = [
@@ -1799,10 +1799,10 @@ async function readTop(canvas,pos,rank){
     scoreH = 60;
   }// 1位の大きさ
   else if(rank === 2){
-    nameW = 240;
+    nameW = 220;
     nameH = 50;
-    scoreW = 160;
-    scoreH = 50;
+    scoreW = 150;
+    scoreH = 45;
   }// 2位の大きさ
   else if(rank === 3){
     nameW = 240;
