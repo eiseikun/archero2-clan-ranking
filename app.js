@@ -1778,20 +1778,28 @@ function levenshtein(a,b){
 }
 
 function matchClan(text){
+  if(!text) return null;
   text = text.replace(/\s/g,"");
-  let best=null;
-  let min=999;
-
+  // 完全一致
+  if(ocrClans.includes(text)) return text;
+  let best = null;
+  let min = 999;
   for(const c of ocrClans){
-    const d = levenshtein(text,c);
+    // 部分一致
+    if(c.includes(text) || text.includes(c)){
+      return c;
+    }
+    const d = levenshtein(text, c);
     if(d < min){
       min = d;
       best = c;
     }
   }
-
-  return min <= 3 ? best : null;
+  // 多少ズレても採用
+  if(min <= 5) return best;
+  return null;
 }
+
 // 読み取り本体
 async function readTop(canvas,pos,rank){
   let nameW, nameH, scoreW, scoreH;
