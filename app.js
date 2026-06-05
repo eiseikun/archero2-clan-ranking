@@ -1741,22 +1741,22 @@ function matchClan(text){
 async function readTop(canvas,pos,rank){
   let nameW, nameH, scoreW, scoreH;
   if(rank === 1){
-    nameW = 300;
-    nameH = 80;
-    scoreW = 230;
-    scoreH = 90;
-  }// 1位の大きさ
-  else if(rank === 2){
     nameW = 280;
     nameH = 75;
-    scoreW = 220;
-    scoreH = 85;
+    scoreW = 150;
+    scoreH = 60;
+  }// 1位の大きさ
+  else if(rank === 2){
+    nameW = 240;
+    nameH = 50;
+    scoreW = 160;
+    scoreH = 50;
   }// 2位の大きさ
   else if(rank === 3){
-    nameW = 260;
-    nameH = 70;
-    scoreW = 210;
-    scoreH = 80;
+    nameW = 240;
+    nameH = 50;
+    scoreW = 160;
+    scoreH = 50;
   }// 3位の大きさ
   drawRect(canvas.getContext("2d"), pos.nameX, pos.nameY, nameW, nameH, "green");
   drawRect(canvas.getContext("2d"), pos.scoreX, pos.scoreY, scoreW, scoreH, "blue");
