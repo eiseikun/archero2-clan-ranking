@@ -1625,7 +1625,7 @@ window.drawChart3 = function () {
 const ocrClans = activeClans;
 // 座標
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
-const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:710 };
+const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
 const TOP3 = { nameX:850, nameY:670, scoreX:920, scoreY:730 };
 
 const rowsOCR = [
@@ -1653,109 +1653,54 @@ function preprocess(ctx,w,h){
 
   for(let i=0;i<d.length;i+=4){
     const gray = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
-    const v = gray > 150 ? 255 : 0;
-    d[i]=d[i+1]=d[i+2]=v;
-  }
-
-  ctx.putImageData(img,0,0);
-}
-
-function preprocessScore(ctx,w,h){
-  const img = ctx.getImageData(0,0,w,h);
-  const d = img.data;
-
-  for(let i=0;i<d.length;i+=4){
-    const r = d[i];
-    const g = d[i+1];
-    const b = d[i+2];
-
-    // 青背景だけ消す
-    if(b > r && b > g){
-      d[i]=d[i+1]=d[i+2]=0;
-      continue;
-    }
-    // 明るい文字だけ残す
-    const brightness = r*0.3 + g*0.59 + b*0.11;
-    const v = brightness > 180 ? 255 : 0;
+    const v = gray>150?255:0;
     d[i]=d[i+1]=d[i+2]=v;
   }
   ctx.putImageData(img,0,0);
 }
 
-
-function crop(canvas,x,y,w,h,isScore=false){
+function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
   c.width = w*2;
   c.height = h*2;
 
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
+  preprocess(ctx,c.width,c.height);
 
-  if(isScore){
-    preprocessScore(ctx,c.width,c.height);
-  }
-  // ✅ 名前は何もしない（ここが重要）
   if(isDebugMain()){
     document.getElementById("debugMain").appendChild(c);
   }
+
   return c;
 }
-
 // スコア補正
 function normalizeScore(text){
-  if(!text) return null;
-  // T消す
-  text = text.replace(/T/gi,"");
-  // よくある誤認識補正（重要）
-  text = text
-    .replace(/O/g,"0")
-    .replace(/o/g,"0")
-    .replace(/I/g,"1")
-    .replace(/l/g,"1")
-    .replace(/,/g,".")
-    .replace(/、/g,".");
-  // 数字と小数点だけ残す
-  text = text.replace(/[^\d.]/g,"");
-  // 小数点複数対策
-  const parts = text.split(".");
-  if(parts.length > 2){
-    text = parts[0] + "." + parts.slice(1).join("");
-  }
-  let num = parseFloat(text);
-  if(isNaN(num)) return null;
-  // 異常値補正
-  if(num < 10) return null;
-  // 強制2桁
-  return parseFloat(num.toFixed(2));
+  text = text.replace("T","").replace(/[^\d.]/g,"");
+
+  const match = text.match(/\d+\.\d{1,3}/);
+  if(!match) return null;
+
+  let num = parseFloat(match[0]);
+
+  if(num < 1 || num > 600) return null;
+
+  return Math.round(num * 100) / 100;
 }
 
 async function readScore(canvas){
-  const results = [];
-  for(let i=0;i<3;i++){
-    const r = await Tesseract.recognize(canvas, "eng", {
-      tessedit_char_whitelist: "0123456789.",
-    });
-    const v = normalizeScore(r.data.text);
-    if(v) results.push(v);
+  const r1 = await Tesseract.recognize(canvas,"eng");
+  const r2 = await Tesseract.recognize(canvas,"eng");
+
+  const s1 = normalizeScore(r1.data.text);
+  const s2 = normalizeScore(r2.data.text);
+
+  if(s1 && s2){
+    return Math.abs(s1 - s2) < 50 ? s1 : s2;
   }
-  if(results.length === 0) return null;
-  //  最頻値計算
-  const count = {};
-  results.forEach(v=>{
-    count[v] = (count[v] || 0) + 1;
-  });
-  let best = null;
-  let max = 0;
-  for(const k in count){
-    if(count[k] > max){
-      max = count[k];
-      best = Number(k);
-    }
-  }
-  return best;
+
+  return s1 || s2;
 }
-
-
 // 名前認識
 async function readName(canvas){
   const res = await Tesseract.recognize(canvas,"jpn");
@@ -1778,73 +1723,54 @@ function levenshtein(a,b){
 }
 
 function matchClan(text){
-  if(!text) return null;
   text = text.replace(/\s/g,"");
-  // 完全一致
-  if(ocrClans.includes(text)) return text;
-  let best = null;
-  let min = 999;
+  let best=null;
+  let min=999;
+
   for(const c of ocrClans){
-    // 部分一致
-    if(c.includes(text) || text.includes(c)){
-      return c;
-    }
-    const d = levenshtein(text, c);
+    const d = levenshtein(text,c);
     if(d < min){
       min = d;
       best = c;
     }
   }
-  // 多少ズレても採用
-  if(min <= 5) return best;
-  return null;
-}
 
+  return min <= 3 ? best : null;
+}
 // 読み取り本体
 async function readTop(canvas,pos,rank){
   let nameW, nameH, scoreW, scoreH;
   if(rank === 1){
-    nameW = 280;
-    nameH = 75;
-    scoreW = 150;
-    scoreH = 60;
+    nameW = 300;
+    nameH = 80;
+    scoreW = 230;
+    scoreH = 90;
   }// 1位の大きさ
   else if(rank === 2){
-    nameW = 220;
-    nameH = 50;
-    scoreW = 150;
-    scoreH = 45;
+    nameW = 280;
+    nameH = 75;
+    scoreW = 220;
+    scoreH = 85;
   }// 2位の大きさ
   else if(rank === 3){
-    nameW = 240;
-    nameH = 50;
-    scoreW = 160;
-    scoreH = 50;
+    nameW = 260;
+    nameH = 70;
+    scoreW = 210;
+    scoreH = 80;
   }// 3位の大きさ
   drawRect(canvas.getContext("2d"), pos.nameX, pos.nameY, nameW, nameH, "green");
   drawRect(canvas.getContext("2d"), pos.scoreX, pos.scoreY, scoreW, scoreH, "blue");
-  const name = matchClan(
-    await readName(
-      crop(canvas,pos.nameX,pos.nameY,nameW,nameH,false) // ← false追加
-      )
-  );
-  const score = await readScore(
-    crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,true) // ← true追加
-    );
+  const name = matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH)));
+  const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH));
   return {name,score};
 }
 // 読み取り本体(4位以降の大きさ)
 async function readRow(canvas,y){
   drawRect(canvas.getContext("2d"),NAME_X,y,350,90,"green");
   drawRect(canvas.getContext("2d"),SCORE_X,y,200,90,"red");
-  const name = matchClan(
-  await readName(
-    crop(canvas,NAME_X,y,350,90,false) // ← false
-    )
-  );
-  const score = await readScore(
-    crop(canvas,SCORE_X,y,200,90,true) // ← true
-    );
+  const name = matchClan(await readName(crop(canvas,NAME_X,y,350,90)));
+  const score = await readScore(crop(canvas,SCORE_X,y,200,90));
+
   return {name,score};
 }
 // OCR実行
