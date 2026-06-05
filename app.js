@@ -1647,17 +1647,28 @@ function drawRect(ctx,x,y,w,h,color){
   ctx.strokeRect(x,y,w,h);
 }
 
-function preprocess(ctx,w,h){
+function preprocessScore(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
   const d = img.data;
 
   for(let i=0;i<d.length;i+=4){
-    const gray = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
-    const v = gray>150?255:0;
+    const r = d[i];
+    const g = d[i+1];
+    const b = d[i+2];
+
+    // 青背景だけ消す
+    if(b > r && b > g){
+      d[i]=d[i+1]=d[i+2]=0;
+      continue;
+    }
+    // 明るい文字だけ残す
+    const brightness = r*0.3 + g*0.59 + b*0.11;
+    const v = brightness > 180 ? 255 : 0;
     d[i]=d[i+1]=d[i+2]=v;
   }
   ctx.putImageData(img,0,0);
 }
+
 
 function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
@@ -1666,7 +1677,12 @@ function crop(canvas,x,y,w,h){
 
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
-  preprocess(ctx,c.width,c.height);
+  if(isScore){
+    preprocessScore(ctx,c.width,c.height);
+  }else{
+    preprocess(ctx,c.width,c.height);
+  }
+
 
   if(isDebugMain()){
     document.getElementById("debugMain").appendChild(c);
@@ -1676,21 +1692,30 @@ function crop(canvas,x,y,w,h){
 }
 // スコア補正
 function normalizeScore(text){
-  text = text.replace("T","").replace(/[^\d.]/g,"");
-
-  const match = text.match(/\d+\.\d{1,3}/);
-  if(!match) return null;
-
-  let num = parseFloat(match[0]);
-
-  if(num < 1 || num > 600) return null;
-
+  text = text.replace("T","");
+  // 変な文字除去
+  text = text.replace(/[^\d.]/g,"");
+  // 複数小数点対策
+  const parts = text.split(".");
+  if(parts.length > 2){
+    text = parts[0] + "." + parts.slice(1).join("");
+  }
+  const num = parseFloat(text);
+  if(!num) return null;
+  // 異常値補正
+  if(num < 10){
+    return null;
+  }
   return Math.round(num * 100) / 100;
 }
 
 async function readScore(canvas){
-  const r1 = await Tesseract.recognize(canvas,"eng");
-  const r2 = await Tesseract.recognize(canvas,"eng");
+  const r1 = await Tesseract.recognize(canvas, "eng", {
+  tessedit_char_whitelist: "0123456789.",
+});
+  const r2 = await Tesseract.recognize(canvas, "eng", {
+  tessedit_char_whitelist: "0123456789.",
+});
 
   const s1 = normalizeScore(r1.data.text);
   const s2 = normalizeScore(r2.data.text);
