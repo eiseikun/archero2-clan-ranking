@@ -1717,26 +1717,65 @@ function toCanvas(img){
 
 /* ==========OCR処理（文字・スコア）========== */
 // スコア整形
-function normalizeScore(text){
-  text = text.replace("T","").replace(/[^\d.]/g,"");
+function normalizeScore(text, page="main"){
 
-  const m = text.match(/\d+\.\d{1,3}/);
+  if(!text) return null;
+
+  text = text.replace(/\s/g,"");
+
+  // ✅ 末尾取得（B or T）
+  let unit = null;
+
+  if(/[Tt]$/.test(text)){
+    unit = "T";
+    text = text.slice(0, -1);
+  }else if(/[Bb]$/.test(text)){
+    unit = "B";
+    text = text.slice(0, -1);
+  }
+
+  // ✅ 文字除去
+  text = text.replace(/[^\d.]/g,"");
+
+  // ✅ 数値抽出
+  const m = text.match(/\d+\.\d+/);
   if(!m) return null;
 
-  const num = parseFloat(m[0]);
-  if(num<1||num>600) return null;
+  let num = parseFloat(m[0]);
 
-  return Math.round(num*100)/100;
+  // ✅ 小数第3桁で誤認識排除（8問題）
+  const decimalPart = m[0].split(".")[1];
+  if(decimalPart && decimalPart.length >= 3){
+    return null;
+  }
+
+  // ✅ Tの扱いをページごとに分岐
+  if(unit === "T"){
+    if(page === "sub"){
+      num *= 1000; // 2ページだけ1000倍
+    }
+    // mainは何もしない
+  }
+
+  // ✅ 範囲チェック
+  if(page === "main"){
+    if(num < 1 || num > 600) return null;
+  }else{
+    if(num < 1 || num > 600000) return null;
+  }
+
+  return Math.round(num * 100) / 100;
 }
 
+
 // スコア読み取り（2回OCRで安定化）
-async function readScore(canvas){
+async function readScore(canvas, page="main"){
   const r1 = await Tesseract.recognize(canvas,"eng");
   const r2 = await Tesseract.recognize(canvas,"eng");
 
-  const s1 = normalizeScore(r1.data.text);
-  const s2 = normalizeScore(r2.data.text);
-
+  const s1 = normalizeScore(r1.data.text, page);
+  const s2 = normalizeScore(r2.data.text, page);
+  
   return (s1 && s2)
     ? (Math.abs(s1-s2)<50?s1:s2)
     : (s1||s2);
@@ -1814,14 +1853,14 @@ async function readTop(canvas,pos,rank){
 
   return {
     name: matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
-    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH))
+    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH),"main")
   };
 }
 
 async function readRow(canvas,y){
   const ctx = canvas.getContext("2d");
 
-  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green","sub");
+  drawRect(ctx,NAME_X,y,350,90,"green","main");
   drawRect(ctx,SCORE_X,y,200,90,"red","main");
 
   return {
@@ -1843,7 +1882,7 @@ async function readTopMember(canvas,pos,rank){
 
   return {
     name: matchMember(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
-    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH))
+    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH),"sub")
   };
 }
 
@@ -1855,7 +1894,7 @@ async function readRowMember(canvas,y){
 
   return {
     name: matchMember(await readName(crop(canvas,NAME_X2,y,420,110))),
-    score: await readScore(crop(canvas,SCORE_X2,y,260,110))
+    score: await readScore(crop(canvas,SCORE_X2,y,260,110),"sub")
   };
 }
 
@@ -1924,7 +1963,7 @@ window.runOCR2 = async function(){
     for(const img of imgs){
       const c = toCanvas(img);
 
-      if(isDebugMain()){
+      if(isDebug2()){
         document.getElementById("debug2").appendChild(c);
       }
 
