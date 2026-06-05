@@ -1619,12 +1619,8 @@ window.drawChart3 = function () {
   });
 };
 /* =============================
- OCR（完全版）
+ OCR
 ============================= */
-/* =============================
- OCR（最終版）
-============================= */
-
 const ocrClans = activeClans;
 
 /* ======== 1ページ座標 ======== */
@@ -1745,9 +1741,15 @@ function matchClan(text){
 }
 
 async function readTop(canvas,pos,rank){
+
   let nameW=300,nameH=80,scoreW=230,scoreH=90;
   if(rank===2){nameW=280;nameH=75;scoreW=220;scoreH=85;}
   if(rank===3){nameW=260;nameH=70;scoreW=210;scoreH=80;}
+
+  const ctx = canvas.getContext("2d");
+
+  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green");
+  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue");
 
   return {
     name: matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
@@ -1755,14 +1757,18 @@ async function readTop(canvas,pos,rank){
   };
 }
 
+
 async function readRow(canvas,y){
+  const ctx = canvas.getContext("2d");
+  drawRect(ctx,NAME_X,y,350,90,"green");
+  drawRect(ctx,SCORE_X,y,200,90,"red");
   return {
     name: matchClan(await readName(crop(canvas,NAME_X,y,350,90))),
     score: await readScore(crop(canvas,SCORE_X,y,200,90))
   };
 }
 
-/* ======== メンバー ======== */
+/* ======== メンバー(2ページ目) ======== */
 
 function matchMember(text){
   text=text.replace(/\s/g,"");
@@ -1784,6 +1790,11 @@ async function readTopMember(canvas,pos,rank){
   let nameW=300,nameH=80,scoreW=260,scoreH=100;
   if(rank===2){nameW=280;nameH=75;scoreW=240;scoreH=95;}
   if(rank===3){nameW=260;nameH=70;scoreW=230;scoreH=90;}
+  
+  const ctx = canvas.getContext("2d");
+  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green");
+  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue");
+
 
   return {
     name: matchMember(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
@@ -1792,11 +1803,15 @@ async function readTopMember(canvas,pos,rank){
 }
 
 async function readRowMember(canvas,y){
+  const ctx = canvas.getContext("2d");
+  drawRect(ctx,NAME_X2,y,420,110,"green");
+  drawRect(ctx,SCORE_X2,y,260,110,"red");
   return {
     name: matchMember(await readName(crop(canvas,NAME_X2,y,420,110))),
     score: await readScore(crop(canvas,SCORE_X2,y,260,110))
   };
 }
+
 
 /* ======== 実行 ======== */
 
@@ -1821,6 +1836,9 @@ window.runOCRMain = async function(){
 
     for(const img of imgs){
       const c=toCanvas(img);
+      if(document.getElementById("debugToggleMain")?.checked){
+        document.getElementById("debugMain").appendChild(c);
+
 
       for(let i=0;i<3;i++){
         const r=await readTop(c,[TOP1,TOP2,TOP3][i],i+1);
@@ -1859,6 +1877,9 @@ window.runOCR2 = async function(){
 
     for(const img of imgs){
       const c=toCanvas(img);
+      if(document.getElementById("debugToggleMain")?.checked){
+        document.getElementById("debugMain").appendChild(c);
+
 
       for(let i=0;i<3;i++){
         const r=await readTopMember(c,[TOP1_2,TOP2_2,TOP3_2][i],i+1);
