@@ -1670,19 +1670,19 @@ function preprocessScore(ctx,w,h){
 }
 
 
-function crop(canvas,x,y,w,h){
+function crop(canvas,x,y,w,h,isScore=false){
   const c = document.createElement("canvas");
   c.width = w*2;
   c.height = h*2;
 
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
+
   if(isScore){
     preprocessScore(ctx,c.width,c.height);
   }else{
     preprocess(ctx,c.width,c.height);
   }
-
 
   if(isDebugMain()){
     document.getElementById("debugMain").appendChild(c);
@@ -1690,6 +1690,7 @@ function crop(canvas,x,y,w,h){
 
   return c;
 }
+
 // スコア補正
 function normalizeScore(text){
   text = text.replace("T","");
