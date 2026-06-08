@@ -1761,6 +1761,7 @@ function normalizeScore(text, page="main"){
 }
 
 
+
 /* ==========高速OCR========== */
 
 // ✅ スコア（1回）
@@ -1772,10 +1773,11 @@ async function readScore(canvas,page="main"){
 }
 
 // ✅ 名前
-async function readNameFast(canvas){
+async function readName(canvas){
   const r = await Tesseract.recognize(canvas,"jpn");
   return r.data.text.replace(/\s/g,"");
 }
+
 
 
 /* ==========文字マッチ========== */
@@ -1823,9 +1825,8 @@ function matchMember(text){
 }
 
 
-/* ==========1ページ========= */
 
-async function readTopFast(canvas,pos,rank){
+async function readTop(canvas,pos,rank){
   let nameW=300,nameH=80,scoreW=230,scoreH=90;
   if(rank===2){nameW=280;nameH=75;scoreW=220;scoreH=85;}
   if(rank===3){nameW=260;nameH=70;scoreW=210;scoreH=80;}
@@ -1839,14 +1840,18 @@ async function readTopFast(canvas,pos,rank){
   const scoreCanvas = crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,"main");
 
   const [nameText, score] = await Promise.all([
-    readNameFast(nameCanvas),
+    readName(nameCanvas),
     readScore(scoreCanvas,"main")
   ]);
 
-  return { name:matchClan(nameText), score };
+  return {
+    name: matchClan(nameText),
+    score
+  };
 }
 
-async function readRowFast(canvas,y){
+// 行
+async function readRow(canvas,y){
   const ctx=canvas.getContext("2d");
 
   drawRect(ctx,NAME_X,y,350,90,"green","main");
@@ -1856,17 +1861,21 @@ async function readRowFast(canvas,y){
   const scoreCanvas = crop(canvas,SCORE_X,y,200,90,"main");
 
   const [nameText, score] = await Promise.all([
-    readNameFast(nameCanvas),
+    readName(nameCanvas),
     readScore(scoreCanvas,"main")
   ]);
 
-  return { name:matchClan(nameText), score };
+  return {
+    name: matchClan(nameText),
+    score
+  };
 }
 
 
 /* ==========2ページ========= */
 
-async function readTopMemberFast(canvas,pos,rank){
+// TOP3
+async function readTopMember(canvas,pos,rank){
   let nameW=300,nameH=80,scoreW=230,scoreH=90;
   if(rank===2){nameW=280;nameH=75;scoreW=240;scoreH=95;}
   if(rank===3){nameW=260;nameH=70;scoreW=230;scoreH=90;}
@@ -1880,14 +1889,18 @@ async function readTopMemberFast(canvas,pos,rank){
   const scoreCanvas = crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,"sub");
 
   const [nameText, score] = await Promise.all([
-    readNameFast(nameCanvas),
+    readName(nameCanvas),
     readScore(scoreCanvas,"sub")
   ]);
 
-  return { name:matchMember(nameText), score };
+  return {
+    name: matchMember(nameText),
+    score
+  };
 }
 
-async function readRowMemberFast(canvas,y){
+// 行
+async function readRowMember(canvas,y){
   const ctx=canvas.getContext("2d");
 
   drawRect(ctx,NAME_X2,y,350,90,"green","sub");
@@ -1897,16 +1910,20 @@ async function readRowMemberFast(canvas,y){
   const scoreCanvas = crop(canvas,SCORE_X2,y,200,90,"sub");
 
   const [nameText, score] = await Promise.all([
-    readNameFast(nameCanvas),
+    readName(nameCanvas),
     readScore(scoreCanvas,"sub")
   ]);
 
-  return { name:matchMember(nameText), score };
+  return {
+    name: matchMember(nameText),
+    score
+  };
 }
 
 
 /* ==========OCR実行========= */
 
+// 1ページ
 window.runOCRMain = async function(){
 
   const f1=document.getElementById("img1Main").files[0];
@@ -1928,18 +1945,20 @@ window.runOCRMain = async function(){
         document.getElementById("debugMain").appendChild(c);
       }
 
+      // ✅ TOP3並列
       const topResults = await Promise.all([
-        readTopFast(c,TOP1,1),
-        readTopFast(c,TOP2,2),
-        readTopFast(c,TOP3,3)
+        readTop(c,TOP1,1),
+        readTop(c,TOP2,2),
+        readTop(c,TOP3,3)
       ]);
 
       topResults.forEach(r=>{
         if(r.name) map[r.name]=r.score??"";
       });
 
+      // ✅ 行並列
       const rows = await Promise.all(
-        rowsOCR.map(r=>readRowFast(c,r.y))
+        rowsOCR.map(r=>readRow(c,r.y))
       );
 
       rows.forEach(r=>{
@@ -1955,6 +1974,7 @@ window.runOCRMain = async function(){
 };
 
 
+// 2ページ
 window.runOCR2 = async function(){
 
   const f1=document.getElementById("img1_2").files[0];
@@ -1977,9 +1997,9 @@ window.runOCR2 = async function(){
       }
 
       const topResults = await Promise.all([
-        readTopMemberFast(c,TOP1_2,1),
-        readTopMemberFast(c,TOP2_2,2),
-        readTopMemberFast(c,TOP3_2,3)
+        readTopMember(c,TOP1_2,1),
+        readTopMember(c,TOP2_2,2),
+        readTopMember(c,TOP3_2,3)
       ]);
 
       topResults.forEach(r=>{
@@ -1987,7 +2007,7 @@ window.runOCR2 = async function(){
       });
 
       const rows = await Promise.all(
-        rowsOCR2.map(r=>readRowMemberFast(c,r.y))
+        rowsOCR2.map(r=>readRowMember(c,r.y))
       );
 
       rows.forEach(r=>{
@@ -2001,3 +2021,4 @@ window.runOCR2 = async function(){
     document.getElementById("ocrLoading2").style.display="none";
   }
 };
+
