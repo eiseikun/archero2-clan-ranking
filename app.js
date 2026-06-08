@@ -1626,32 +1626,36 @@ window.drawChart3 = function () {
 
 /* ==========基本設定========== */
 const ocrClans = activeClans;
+
 /* ==========座標設定========== */
 // ===== 1ページ =====
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
 const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
 const TOP3 = { nameX:850, nameY:670, scoreX:920, scoreY:730 };
+
 const rowsOCR = [
   { y:880 },{ y:1073 },{ y:1265 },
   { y:1458 },{ y:1650 },{ y:1843 },{ y:2035 }
 ];
+
 const NAME_X = 440;
 const SCORE_X = 895;
+
 // ===== 2ページ =====
 const TOP1_2 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
 const TOP2_2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
 const TOP3_2 = { nameX:850, nameY:670, scoreX:920, scoreY:730 };
-// 1ページと同じ行構造を流用
+
 const rowsOCR2 = rowsOCR;
+
 const NAME_X2 = 420;
 const SCORE_X2 = 870;
 
-/* ==========デバッグ関連========== */
-// ===== 1ページ =====
+
+/* ==========デバッグ========== */
 function isDebugMain(){
   return document.getElementById("debugToggleMain")?.checked;
 }
-// ===== 2ページ =====
 function isDebug2(){
   return document.getElementById("debugToggle2")?.checked;
 }
@@ -1666,31 +1670,38 @@ function drawRect(ctx,x,y,w,h,color,mode="main"){
 }
 
 
-/* ==========共通画像処理========== */
+/* ==========画像処理========== */
 function preprocess(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
   const d = img.data;
+
   for(let i=0;i<d.length;i+=4){
     const gray = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
-    const v = gray>150?255:0;
+    const v = gray>150 ? 255 : 0;
     d[i]=d[i+1]=d[i+2]=v;
   }
+
   ctx.putImageData(img,0,0);
 }
-// 画像切り抜き＋拡大
+
+// ✅ 軽量crop（速度改善）
 function crop(canvas,x,y,w,h,mode="main"){
   const c = document.createElement("canvas");
-  c.width = w*2;
-  c.height = h*2;
+
+  let scale = 1.5;
+  if(mode==="sub") scale = 1;
+
+  c.width = w * scale;
+  c.height = h * scale;
 
   const ctx = c.getContext("2d");
-  ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
+  ctx.drawImage(canvas,x,y,w,h,0,0,w*scale,h*scale);
+
   preprocess(ctx,c.width,c.height);
 
   if(mode==="main" && isDebugMain()){
     document.getElementById("debugMain")?.appendChild(c);
   }
-
   if(mode==="sub" && isDebug2()){
     document.getElementById("debug2")?.appendChild(c);
   }
@@ -1698,7 +1709,6 @@ function crop(canvas,x,y,w,h,mode="main"){
   return c;
 }
 
-// 画像→キャンバス
 function loadImage(file){
   return new Promise(res=>{
     const img=new Image();
@@ -1706,6 +1716,7 @@ function loadImage(file){
     img.src=URL.createObjectURL(file);
   });
 }
+
 function toCanvas(img){
   const c=document.createElement("canvas");
   c.width=img.width;
@@ -1715,79 +1726,59 @@ function toCanvas(img){
 }
 
 
-/* ==========OCR処理（文字・スコア）========== */
-// スコア整形
+/* ==========スコア整形========== */
 function normalizeScore(text, page="main"){
-
   if(!text) return null;
 
   text = text.replace(/\s/g,"");
 
-  // ✅ 末尾取得（B or T）
   let unit = null;
-
   if(/[Tt]$/.test(text)){
-    unit = "T";
-    text = text.slice(0, -1);
+    unit = "T"; text=text.slice(0,-1);
   }else if(/[Bb]$/.test(text)){
-    unit = "B";
-    text = text.slice(0, -1);
+    unit = "B"; text=text.slice(0,-1);
   }
 
-  // ✅ 文字除去
   text = text.replace(/[^\d.]/g,"");
 
-  // ✅ 数値抽出
   const m = text.match(/\d+\.\d+/);
   if(!m) return null;
 
   let num = parseFloat(m[0]);
 
-  // ✅ 小数第3桁で誤認識排除（8問題）
-  const decimalPart = m[0].split(".")[1];
-  if(decimalPart && decimalPart.length >= 3){
-    return null;
-  }
+  const decimal = m[0].split(".")[1];
+  if(decimal && decimal.length >= 3) return null;
 
-  // ✅ Tの扱いをページごとに分岐
-  if(unit === "T"){
-    if(page === "sub"){
-      num *= 1000; // 2ページだけ1000倍
-    }
-    // mainは何もしない
-  }
+  if(unit==="T" && page==="sub") num *= 1000;
 
-  // ✅ 範囲チェック
-  if(page === "main"){
-    if(num < 1 || num > 600) return null;
+  if(page==="main"){
+    if(num<1 || num>600) return null;
   }else{
-    if(num < 1 || num > 600000) return null;
+    if(num<1 || num>600000) return null;
   }
 
-  return Math.round(num * 100) / 100;
+  return Math.round(num*100)/100;
 }
 
 
-// スコア読み取り（2回OCRで安定化）
-async function readScore(canvas, page="main"){
-  const r1 = await Tesseract.recognize(canvas,"eng");
-  const r2 = await Tesseract.recognize(canvas,"eng");
+/* ==========高速OCR========== */
 
-  const s1 = normalizeScore(r1.data.text, page);
-  const s2 = normalizeScore(r2.data.text, page);
-  
-  return (s1 && s2)
-    ? (Math.abs(s1-s2)<50?s1:s2)
-    : (s1||s2);
+// ✅ スコア（1回）
+async function readScore(canvas,page="main"){
+  const r = await Tesseract.recognize(canvas,"eng",{
+    tessedit_char_whitelist:"0123456789.BT"
+  });
+  return normalizeScore(r.data.text,page);
 }
 
-// 名前読み取り
-async function readName(canvas){
-  const res = await Tesseract.recognize(canvas,"jpn");
-  return res.data.text.replace(/\s/g,"");
+// ✅ 名前
+async function readNameFast(canvas){
+  const r = await Tesseract.recognize(canvas,"jpn");
+  return r.data.text.replace(/\s/g,"");
 }
 
-/* ==========マッチング処理========== */
+
+/* ==========文字マッチ========== */
 function levenshtein(a,b){
   const m=[];
   for(let i=0;i<=b.length;i++)m[i]=[i];
@@ -1795,7 +1786,7 @@ function levenshtein(a,b){
 
   for(let i=1;i<=b.length;i++){
     for(let j=1;j<=a.length;j++){
-      m[i][j] = b[i-1]===a[j-1]
+      m[i][j]=b[i-1]===a[j-1]
         ? m[i-1][j-1]
         : Math.min(m[i-1][j-1]+1,m[i][j-1]+1,m[i-1][j]+1);
     }
@@ -1803,127 +1794,124 @@ function levenshtein(a,b){
   return m[b.length][a.length];
 }
 
-// クラン一致
 function matchClan(text){
   text=text.replace(/\s/g,"");
-
-  let best=null;
-  let min=999;
+  let best=null,min=999;
 
   for(const c of ocrClans){
     const d=levenshtein(text,c);
     if(d<min){min=d;best=c;}
   }
-
   return min<=3?best:null;
 }
 
-// メンバー一致
 function matchMember(text){
   text=text.replace(/\s/g,"");
-
-  let best=null;
-  let min=999;
 
   const members=[
     ...baseMembers,
     ...[...new Set(rankList.map(d=>d.member))]
   ];
 
+  let best=null,min=999;
+
   for(const m of members){
     const d=levenshtein(text,m);
     if(d<min){min=d;best=m;}
   }
-
   return min<=3?best:null;
 }
 
 
-/* ==========OCR読み取り本体========== */
-// ===== 1ページ =====
-async function readTop(canvas,pos,rank){
-  // ▼枠サイズ（ここ変えると大きさ変わる▼
+/* ==========1ページ========= */
+
+async function readTopFast(canvas,pos,rank){
   let nameW=300,nameH=80,scoreW=230,scoreH=90;
   if(rank===2){nameW=280;nameH=75;scoreW=220;scoreH=85;}
   if(rank===3){nameW=260;nameH=70;scoreW=210;scoreH=80;}
 
-  const ctx = canvas.getContext("2d");
+  const ctx=canvas.getContext("2d");
 
-  // ▼枠の表示（デバッグ用）▼
-  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green","main");//緑＝名前の枠（見てる場所）
-  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue","main");//青＝スコアの枠
-  
-  // ▼実際に読んでる範囲▼
-   // pos.nameX → 横位置
-   // pos.nameY → 縦位置
-   // nameW / nameH → サイズ
-  return {
-    name: matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
-    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH),"main")
-  };
+  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green","main");
+  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue","main");
+
+  const nameCanvas = crop(canvas,pos.nameX,pos.nameY,nameW,nameH,"main");
+  const scoreCanvas = crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,"main");
+
+  const [nameText, score] = await Promise.all([
+    readNameFast(nameCanvas),
+    readScore(scoreCanvas,"main")
+  ]);
+
+  return { name:matchClan(nameText), score };
 }
 
-// ▼ 1ページ（4位以降）
-async function readRow(canvas,y){
-  const ctx = canvas.getContext("2d");
-  // ▼枠（見た目）▼
+async function readRowFast(canvas,y){
+  const ctx=canvas.getContext("2d");
+
   drawRect(ctx,NAME_X,y,350,90,"green","main");
   drawRect(ctx,SCORE_X,y,200,90,"red","main");
 
-  // ▼実際に読んでる範囲▼
-  return {
-    name: matchClan(await readName(crop(canvas, NAME_X, y, 350, 90, "main"))),
-    score: await readScore(crop(canvas,SCORE_X,y,200,90),"main")
-  };
-}
-  
+  const nameCanvas = crop(canvas,NAME_X,y,350,90,"main");
+  const scoreCanvas = crop(canvas,SCORE_X,y,200,90,"main");
 
-// ===== 2ページ =====
-async function readTopMember(canvas,pos,rank){
-  // ▼枠サイズ（ここ変えると大きさ変わる▼
+  const [nameText, score] = await Promise.all([
+    readNameFast(nameCanvas),
+    readScore(scoreCanvas,"main")
+  ]);
+
+  return { name:matchClan(nameText), score };
+}
+
+
+/* ==========2ページ========= */
+
+async function readTopMemberFast(canvas,pos,rank){
   let nameW=300,nameH=80,scoreW=230,scoreH=90;
   if(rank===2){nameW=280;nameH=75;scoreW=240;scoreH=95;}
   if(rank===3){nameW=260;nameH=70;scoreW=230;scoreH=90;}
 
-  const ctx = canvas.getContext("2d");
+  const ctx=canvas.getContext("2d");
 
-  // ▼枠表示▼
-  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green");
-  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue");
+  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green","sub");
+  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue","sub");
 
-  // ▼実際に読んでる範囲▼
-   return {
-    name: matchMember(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH))),
-    score: await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH),"sub")
-  };
+  const nameCanvas = crop(canvas,pos.nameX,pos.nameY,nameW,nameH,"sub");
+  const scoreCanvas = crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH,"sub");
+
+  const [nameText, score] = await Promise.all([
+    readNameFast(nameCanvas),
+    readScore(scoreCanvas,"sub")
+  ]);
+
+  return { name:matchMember(nameText), score };
+}
+
+async function readRowMemberFast(canvas,y){
+  const ctx=canvas.getContext("2d");
+
+  drawRect(ctx,NAME_X2,y,350,90,"green","sub");
+  drawRect(ctx,SCORE_X2,y,200,90,"red","sub");
+
+  const nameCanvas = crop(canvas,NAME_X2,y,350,90,"sub");
+  const scoreCanvas = crop(canvas,SCORE_X2,y,200,90,"sub");
+
+  const [nameText, score] = await Promise.all([
+    readNameFast(nameCanvas),
+    readScore(scoreCanvas,"sub")
+  ]);
+
+  return { name:matchMember(nameText), score };
 }
 
 
+/* ==========OCR実行========= */
 
-// ▼ 2ページ（4位以降）
-async function readRowMember(canvas,y){
-  const ctx = canvas.getContext("2d");
-
-  // ▼枠（見た目）▼
-  drawRect(ctx,NAME_X2,y,350,90,"green");
-  drawRect(ctx,SCORE_X2,y,200,90,"red");
-  
-  // ▼実際に読んでる範囲▼
-  return {
-    name: matchMember(await readName(crop(canvas,NAME_X2,y,350,90,"sub"))),
-    score: await readScore(crop(canvas,SCORE_X2,y,200,90),"sub")
-  };
-}
-
-
-/* ==========OCR実行========== */
-// ===== 1ページ =====
 window.runOCRMain = async function(){
 
-  const f1 = document.getElementById("img1Main").files[0];
-  const f2 = document.getElementById("img2Main").files[0];
-
-  if(!f1 || !f2) return alert("画像2枚選択して");
+  const f1=document.getElementById("img1Main").files[0];
+  const f2=document.getElementById("img2Main").files[0];
+  if(!f1||!f2) return alert("画像2枚選択して");
 
   document.getElementById("debugMain").innerHTML="";
   document.getElementById("ocrLoading").style.display="block";
@@ -1934,24 +1922,29 @@ window.runOCRMain = async function(){
     const imgs=[await loadImage(f1),await loadImage(f2)];
 
     for(const img of imgs){
-      const c = toCanvas(img);
+      const c=toCanvas(img);
 
-      // 元画像表示（デバッグ）
       if(isDebugMain()){
         document.getElementById("debugMain").appendChild(c);
       }
 
-      // TOP3
-      for(let i=0;i<3;i++){
-        const r=await readTop(c,[TOP1,TOP2,TOP3][i],i+1);
-        if(r.name) map[r.name]=r.score??"";
-      }
+      const topResults = await Promise.all([
+        readTopFast(c,TOP1,1),
+        readTopFast(c,TOP2,2),
+        readTopFast(c,TOP3,3)
+      ]);
 
-      // 4位以降
-      for(const r of rowsOCR){
-        const row=await readRow(c,r.y);
-        if(row.name) map[row.name]=row.score??"";
-      }
+      topResults.forEach(r=>{
+        if(r.name) map[r.name]=r.score??"";
+      });
+
+      const rows = await Promise.all(
+        rowsOCR.map(r=>readRowFast(c,r.y))
+      );
+
+      rows.forEach(r=>{
+        if(r.name) map[r.name]=r.score??"";
+      });
     }
 
     renderOCRResultHigh(map);
@@ -1962,13 +1955,11 @@ window.runOCRMain = async function(){
 };
 
 
-// ===== 2ページ =====
 window.runOCR2 = async function(){
 
-  const f1 = document.getElementById("img1_2").files[0];
-  const f2 = document.getElementById("img2_2").files[0];
-
-  if(!f1 || !f2) return alert("画像2枚選択して");
+  const f1=document.getElementById("img1_2").files[0];
+  const f2=document.getElementById("img2_2").files[0];
+  if(!f1||!f2) return alert("画像2枚選択して");
 
   document.getElementById("debug2").innerHTML="";
   document.getElementById("ocrLoading2").style.display="block";
@@ -1979,21 +1970,29 @@ window.runOCR2 = async function(){
     const imgs=[await loadImage(f1),await loadImage(f2)];
 
     for(const img of imgs){
-      const c = toCanvas(img);
+      const c=toCanvas(img);
 
       if(isDebug2()){
         document.getElementById("debug2").appendChild(c);
       }
 
-      for(let i=0;i<3;i++){
-        const r=await readTopMember(c,[TOP1_2,TOP2_2,TOP3_2][i],i+1);
-        if(r.name) map[r.name]=r.score??"";
-      }
+      const topResults = await Promise.all([
+        readTopMemberFast(c,TOP1_2,1),
+        readTopMemberFast(c,TOP2_2,2),
+        readTopMemberFast(c,TOP3_2,3)
+      ]);
 
-      for(const r of rowsOCR2){
-        const row=await readRowMember(c,r.y);
-        if(row.name) map[row.name]=row.score??"";
-      }
+      topResults.forEach(r=>{
+        if(r.name) map[r.name]=r.score??"";
+      });
+
+      const rows = await Promise.all(
+        rowsOCR2.map(r=>readRowMemberFast(c,r.y))
+      );
+
+      rows.forEach(r=>{
+        if(r.name) map[r.name]=r.score??"";
+      });
     }
 
     renderOCRResult2(map);
@@ -2002,76 +2001,3 @@ window.runOCR2 = async function(){
     document.getElementById("ocrLoading2").style.display="none";
   }
 };
-
-
-/* ======== 表示 ======== */
-
-function renderOCRResultHigh(map){
-  let html="<table>";
-  for(const c of activeClans){
-    html+=`<tr><td>${c}</td><td><input value="${map[c]??""}" data-clan="${c}"></td></tr>`;
-  }
-  html+="</table>";
-  document.getElementById("ocrResult").innerHTML=html;
-}
-
-function renderOCRResult2(map){
-  let html = "<table>";
-  const sorted = Object.entries(map)
-    .sort((a,b)=> (b[1]||0) - (a[1]||0));
-
-  for(const [m,score] of sorted){
-    html += `<tr><td>${m}</td><td><input value="${score??""}" data-member="${m}"></td></tr>`;
-  }
-  html += "</table>";
-  document.getElementById("ocrResult2").innerHTML = html;
-}
-
-window.saveOCRHigh = async function(){
-  const date=document.getElementById("ocrDate").value;
-  const inputs=document.querySelectorAll("#ocrResult input");
-
-  for(const i of inputs){
-    if(!i.value) continue;
-    await setDoc(doc(db,"scores",`${date}_${i.dataset.clan}`),{
-      clan:i.dataset.clan,
-      score:Number(i.value)*1000,
-      date,
-      time:Date.now()
-    });
-  }
-  alert("保存完了");
-};
-
-
-
-window.saveOCR2 = async function(){
-  const date=document.getElementById("ocrDate2").value;
-  const inputs=document.querySelectorAll("#ocrResult2 input");
-
-  for(const i of inputs){
-    if(!i.value) continue;
-    await setDoc(doc(db,"ranks",`${date}_${i.dataset.member}`),{
-      clan:"ねこ海賊団",
-      member:i.dataset.member,
-      score:Number(i.value)*1000,
-      date,
-      time:Date.now()
-    });
-  }
-  alert("保存完了");
-};
-
-
-
-
-/* ======== UI ======== */
-
-window.toggleOCRBox=()=>toggle("ocrBox");
-window.toggleOCRBox2=()=>toggle("ocrBox2");
-
-function toggle(id){
-  const b=document.getElementById(id);
-  b.style.display=(b.style.display==="none")?"block":"none";
-}
-
