@@ -2093,3 +2093,8 @@ window.saveOCR2 = async function(){
 
   alert("保存完了 👍");
 };
+// OCR折り畳み（2ページ目）
+window.toggleOCRBox2 = function () {
+  const box = document.getElementById("ocrBox2");
+  box.style.display = (box.style.display === "none") ? "block" : "none";
+};
