@@ -1618,12 +1618,12 @@ window.drawChart3 = function () {
     }
   });
 };
-
-
 /* =============================
- OCR
+ OCR（安定版ベース＋軽改善）
 ============================= */
+
 const ocrClans = activeClans;
+
 // 座標
 const TOP1 = { nameX:460, nameY:590, scoreX:550, scoreY:665 };
 const TOP2 = { nameX:120, nameY:650, scoreX:180, scoreY:700 };
@@ -1636,7 +1636,10 @@ const rowsOCR = [
 
 const NAME_X = 440;
 const SCORE_X = 895;
-// OCR共通関数
+
+
+/* ---------- デバッグ ---------- */
+
 function isDebugMain(){
   return document.getElementById("debugToggleMain")?.checked;
 }
@@ -1647,6 +1650,9 @@ function drawRect(ctx,x,y,w,h,color){
   ctx.lineWidth=3;
   ctx.strokeRect(x,y,w,h);
 }
+
+
+/* ---------- 画像処理 ---------- */
 
 function preprocess(ctx,w,h){
   const img = ctx.getImageData(0,0,w,h);
@@ -1662,11 +1668,14 @@ function preprocess(ctx,w,h){
 
 function crop(canvas,x,y,w,h){
   const c = document.createElement("canvas");
+
+  // ✅ 安定重視 = 2倍
   c.width = w*2;
   c.height = h*2;
 
   const ctx = c.getContext("2d");
   ctx.drawImage(canvas,x,y,w,h,0,0,w*2,h*2);
+
   preprocess(ctx,c.width,c.height);
 
   if(isDebugMain()){
@@ -1675,20 +1684,25 @@ function crop(canvas,x,y,w,h){
 
   return c;
 }
-// スコア補正
+
+
+/* ---------- OCR ---------- */
+
+// ✅ スコア整形（安定版）
 function normalizeScore(text){
-  text = text.replace("T","").replace(/[^\d.]/g,"");
+  text = (text||"").replace("T","").replace(/[^\d.]/g,"");
 
   const match = text.match(/\d+\.\d{1,3}/);
   if(!match) return null;
 
   let num = parseFloat(match[0]);
 
-  if(num < 1 || num > 600) return null;
+  if(num<1 || num>600) return null;
 
-  return Math.round(num * 100) / 100;
+  return Math.round(num*100)/100;
 }
 
+// ✅ スコア読み取り（2回）※安定のキモ
 async function readScore(canvas){
   const r1 = await Tesseract.recognize(canvas,"eng");
   const r2 = await Tesseract.recognize(canvas,"eng");
@@ -1697,16 +1711,19 @@ async function readScore(canvas){
   const s2 = normalizeScore(r2.data.text);
 
   if(s1 && s2){
-    return Math.abs(s1 - s2) < 50 ? s1 : s2;
+    return Math.abs(s1-s2) < 50 ? s1 : s2;
   }
-
   return s1 || s2;
 }
-// 名前認識
+
+// ✅ 名前
 async function readName(canvas){
   const res = await Tesseract.recognize(canvas,"jpn");
-  return res.data.text.replace(/\s/g,"");
+  return (res.data.text||"").replace(/\s/g,"");
 }
+
+
+/* ---------- マッチ ---------- */
 
 function levenshtein(a,b){
   const m=[];
@@ -1724,140 +1741,168 @@ function levenshtein(a,b){
 }
 
 function matchClan(text){
-  text = text.replace(/\s/g,"");
+  text = (text||"").replace(/\s/g,"");
+
   let best=null;
   let min=999;
 
   for(const c of ocrClans){
     const d = levenshtein(text,c);
-    if(d < min){
-      min = d;
-      best = c;
+    if(d<min){
+      min=d;
+      best=c;
     }
   }
 
-  return min <= 3 ? best : null;
+  return min<=3 ? best : null;
 }
-// 読み取り本体
+
+
+/* ---------- 読み取り ---------- */
+
+// TOP
 async function readTop(canvas,pos,rank){
-  let nameW, nameH, scoreW, scoreH;
-  if(rank === 1){
-    nameW = 300;
-    nameH = 80;
-    scoreW = 230;
-    scoreH = 90;
-  }// 1位の大きさ
-  else if(rank === 2){
-    nameW = 280;
-    nameH = 75;
-    scoreW = 220;
-    scoreH = 85;
-  }// 2位の大きさ
-  else if(rank === 3){
-    nameW = 260;
-    nameH = 70;
-    scoreW = 210;
-    scoreH = 80;
-  }// 3位の大きさ
-  drawRect(canvas.getContext("2d"), pos.nameX, pos.nameY, nameW, nameH, "green");
-  drawRect(canvas.getContext("2d"), pos.scoreX, pos.scoreY, scoreW, scoreH, "blue");
-  const name = matchClan(await readName(crop(canvas,pos.nameX,pos.nameY,nameW,nameH)));
-  const score = await readScore(crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH));
-  return {name,score};
-}
-// 読み取り本体(4位以降の大きさ)
-async function readRow(canvas,y){
-  drawRect(canvas.getContext("2d"),NAME_X,y,350,90,"green");
-  drawRect(canvas.getContext("2d"),SCORE_X,y,200,90,"red");
-  const name = matchClan(await readName(crop(canvas,NAME_X,y,350,90)));
-  const score = await readScore(crop(canvas,SCORE_X,y,200,90));
+  let nameW=300,nameH=80,scoreW=230,scoreH=90;
+
+  if(rank===2){nameW=280;nameH=75;scoreW=220;scoreH=85;}
+  if(rank===3){nameW=260;nameH=70;scoreW=210;scoreH=80;}
+
+  const ctx = canvas.getContext("2d");
+
+  drawRect(ctx,pos.nameX,pos.nameY,nameW,nameH,"green");
+  drawRect(ctx,pos.scoreX,pos.scoreY,scoreW,scoreH,"blue");
+
+  const nameCanvas = crop(canvas,pos.nameX,pos.nameY,nameW,nameH);
+  const scoreCanvas = crop(canvas,pos.scoreX,pos.scoreY,scoreW,scoreH);
+
+  const name = matchClan(await readName(nameCanvas));
+  const score = await readScore(scoreCanvas);
 
   return {name,score};
 }
-// OCR実行
+
+// 行
+async function readRow(canvas,y){
+  const ctx = canvas.getContext("2d");
+
+  drawRect(ctx,NAME_X,y,350,90,"green");
+  drawRect(ctx,SCORE_X,y,200,90,"red");
+
+  const nameCanvas = crop(canvas,NAME_X,y,350,90);
+  const scoreCanvas = crop(canvas,SCORE_X,y,200,90);
+
+  const name = matchClan(await readName(nameCanvas));
+  const score = await readScore(scoreCanvas);
+
+  return {name,score};
+}
+
+
+/* ---------- 実行 ---------- */
+
 let ocrResultMap = {};
+
 window.runOCRMain = async function(){
-  // ローディング表示ON
+
   document.getElementById("ocrLoading").style.display = "block";
   document.getElementById("debugMain").innerHTML="";
   document.getElementById("ocrResult").innerHTML="";
-  try {
-    const img1 = await loadImage(document.getElementById("img1Main").files[0]);
-    const img2 = await loadImage(document.getElementById("img2Main").files[0]);
+
+  try{
+    const file1 = document.getElementById("img1Main").files[0];
+    const file2 = document.getElementById("img2Main").files[0];
+
+    if(!file1 || !file2){
+      alert("画像2枚選択して");
+      return;
+    }
+
+    const img1 = await loadImage(file1);
+    const img2 = await loadImage(file2);
+
     const imgs = [img1,img2];
+
     const map = {};
+
     for(const img of imgs){
+
       const canvas = toCanvas(img);
+
       if(isDebugMain()){
         document.getElementById("debugMain").appendChild(canvas);
       }
-      const tops = [TOP1, TOP2, TOP3];
-      for(let i=0; i < tops.length; i++){
-        const r = await readTop(canvas, tops[i], i+1);
+
+      // TOP3
+      const tops = [TOP1,TOP2,TOP3];
+
+      for(let i=0;i<tops.length;i++){
+        const r = await readTop(canvas,tops[i],i+1);
         if(r.name) map[r.name] = r.score ?? "";
       }
+
+      // 行
       for(const r of rowsOCR){
         const row = await readRow(canvas,r.y);
         if(row.name) map[row.name] = row.score ?? "";
       }
     }
+
     ocrResultMap = map;
     renderOCRResultHigh();
-  } finally {
-    // ローディングOFF（超重要）
+
+  }finally{
     document.getElementById("ocrLoading").style.display = "none";
   }
 };
 
-// 表示
+
+/* ---------- 表示 ---------- */
+
 function renderOCRResultHigh(){
-  let html = "<table><tr><th>クラン</th><th>スコア（修正可）</th></tr>";
+  let html = "<table>";
+
   for(const c of activeClans){
     const val = ocrResultMap[c];
-    html += `<tr>
-      <td>${c}</td>
-      <td>
-        <input 
-          type="number"
-          step="0.01"
-          value="${val ?? ""}"
-          data-clan="${c}"
-        >
-      </td>
-    </tr>`;
+    html += `
+      <tr>
+        <td>${c}</td>
+        <td><input type="number" step="0.01" value="${val??""}" data-clan="${c}"></td>
+      </tr>`;
   }
+
   html += "</table>";
   document.getElementById("ocrResult").innerHTML = html;
 }
 
-// Firebase保存（完全連携）
+
+/* ---------- 保存 ---------- */
+
 window.saveOCRHigh = async function(){
 
   const inputs = document.querySelectorAll("#ocrResult input");
-
   const date = document.getElementById("ocrDate").value;
-if (!date) return alert("OCR用の日付を入れて");
 
+  if(!date) return alert("日付入れて");
 
   for(const input of inputs){
 
     const clan = input.dataset.clan;
     const scoreT = Number(input.value);
-
     if(!scoreT) continue;
-
-    const scoreB = scoreT * 1000;
 
     await setDoc(doc(db,"scores",`${date}_${clan}`),{
       clan,
-      score: scoreB,
+      score: scoreT*1000,
       date,
       time: Date.now()
     });
   }
 
-  alert("修正込みで保存完了 👍");
+  alert("保存完了 ✅");
 };
+
+
+/* ---------- 画像 ---------- */
 
 function loadImage(file){
   return new Promise(res=>{
@@ -1874,8 +1919,12 @@ function toCanvas(img){
   c.getContext("2d").drawImage(img,0,0);
   return c;
 }
-// OCR折り畳み
-window.toggleOCRBox = function () {
+
+
+/* ---------- UI ---------- */
+
+window.toggleOCRBox = function(){
   const box = document.getElementById("ocrBox");
-  box.style.display = (box.style.display === "none") ? "block" : "none";
+  box.style.display = box.style.display === "none" ? "block" : "none";
 };
+
