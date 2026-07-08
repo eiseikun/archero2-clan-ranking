@@ -1,0 +1,802 @@
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;800&family=Cinzel:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+
+<style>
+  :root{
+    --bg:#0a0c12;
+    --bg-panel:#12151f;
+    --bg-panel2:#181c29;
+    --bg-panel3:#1f2432;
+    --border:#262c3d;
+    --border-soft:#1b2030;
+    --gold:#d4af37;
+    --gold-soft:#e8cf7a;
+    --blood:#9b2c2c;
+    --blood-bright:#c0392b;
+    --cyan:#45c4b0;
+    --silver:#b9c2cf;
+    --bronze:#c17a4a;
+    --text:#e9e7e0;
+    --text-dim:#8b92a6;
+    --text-faint:#5a6178;
+    --up:#4fbf6a;
+    --down:#e0555a;
+  }
+  *{box-sizing:border-box;}
+  #mi-root{
+    background:
+      radial-gradient(ellipse 120% 60% at 50% -10%, rgba(155,44,44,0.16), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans JP', sans-serif;
+    min-height:100%;
+    padding:0 0 48px 0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mi-wrap{max-width:640px;margin:0 auto;padding:0 16px;}
+
+  .mi-header{position:relative;padding:28px 0 18px;text-align:center;overflow:hidden;}
+  .mi-eyebrow{
+    font-family:'Cinzel',serif;font-size:11px;letter-spacing:.28em;
+    color:var(--gold-soft);text-transform:uppercase;opacity:.85;margin-bottom:6px;
+  }
+  .mi-banner{position:relative;display:inline-block;padding:10px 38px;margin-top:2px;}
+  .mi-banner::before{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, var(--blood-bright), var(--blood) 70%, #5e1919);
+    clip-path:polygon(3% 0%, 97% 0%, 100% 30%, 96% 50%, 100% 70%, 97% 100%, 3% 100%, 0% 68%, 4% 50%, 0% 32%);
+    box-shadow:0 8px 24px -8px rgba(155,44,44,.6);
+  }
+  .mi-title{
+    position:relative;font-family:'Shippori Mincho',serif;font-weight:800;
+    font-size:26px;letter-spacing:.06em;color:#fdf6e3;
+    text-shadow:0 2px 6px rgba(0,0,0,.5);
+    white-space:nowrap;
+  }
+  .mi-sub{margin-top:10px;font-size:11px;color:var(--text-faint);letter-spacing:.16em;font-family:'Cinzel',serif;}
+
+  .mi-scopeswitch{display:flex;gap:8px;margin:18px 0 10px;}
+  .mi-scope-btn{
+    flex:1;text-align:center;padding:11px 6px;border-radius:11px;font-size:13px;font-weight:700;
+    background:var(--bg-panel);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;letter-spacing:.02em;
+  }
+  .mi-scope-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(69,196,176,.12);box-shadow:inset 0 0 0 1px rgba(69,196,176,.25);}
+
+  .mi-tabs{display:flex;gap:6px;margin:0 0 16px;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:5px;}
+  .mi-tab{
+    flex:1;text-align:center;padding:10px 4px;border-radius:8px;font-size:13px;font-weight:700;
+    color:var(--text-dim);cursor:pointer;user-select:none;letter-spacing:.02em;transition:all .15s;
+  }
+  .mi-tab.active{background:linear-gradient(180deg,#2a2033,var(--bg-panel3));color:var(--gold-soft);box-shadow:inset 0 0 0 1px rgba(212,175,55,.35);}
+
+  .mi-pillrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:thin;}
+  .mi-pillrow::-webkit-scrollbar{height:4px;}
+  .mi-pillrow::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .mi-pill{
+    flex:0 0 auto;padding:8px 14px;border-radius:999px;font-size:12.5px;font-weight:600;
+    background:var(--bg-panel2);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;white-space:nowrap;
+  }
+  .mi-pill.active{background:rgba(212,175,55,.14);border-color:var(--gold);color:var(--gold-soft);}
+
+  .mi-panel{background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .mi-panel-title{font-family:'Shippori Mincho',serif;font-weight:800;font-size:15px;color:var(--gold-soft);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .mi-updated{font-size:11px;color:var(--text-faint);margin-bottom:10px;font-family:'JetBrains Mono',monospace;}
+
+  .mi-rank-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--border-soft);border-left:3px solid transparent;}
+  .mi-rank-row:last-child{border-bottom:none;}
+  .mi-rank-row.home{border-left-color:var(--cyan);background:rgba(69,196,176,.06);border-radius:6px;}
+  .mi-rank-num{
+    flex:0 0 32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;background:var(--bg-panel2);color:var(--text-dim);
+  }
+  .mi-rank-row.r1 .mi-rank-num{background:linear-gradient(160deg,#f4d874,var(--gold));color:#2a2205;box-shadow:0 0 12px -2px rgba(212,175,55,.7);}
+  .mi-rank-row.r2 .mi-rank-num{background:linear-gradient(160deg,#e4e9ee,var(--silver));color:#232830;}
+  .mi-rank-row.r3 .mi-rank-num{background:linear-gradient(160deg,#e3a877,var(--bronze));color:#2b1908;}
+  .mi-rank-clan{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mi-home-tag{font-size:10px;color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;padding:1px 5px;margin-left:6px;font-weight:700;vertical-align:middle;}
+  .mi-rank-score{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--cyan);font-size:13.5px;}
+  .mi-empty{text-align:center;color:var(--text-faint);font-size:13px;padding:30px 10px;line-height:1.8;}
+  .mi-noshow{padding:8px 6px;font-size:12.5px;color:var(--text-faint);border-bottom:1px solid var(--border-soft);}
+  .mi-noshow:last-child{border-bottom:none;}
+
+  .mi-btn{
+    background:linear-gradient(180deg,#2a3244,var(--bg-panel3));border:1px solid var(--border);color:var(--text);
+    padding:10px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.02em;
+  }
+  .mi-btn:hover{border-color:var(--gold);}
+  .mi-btn-gold{background:linear-gradient(180deg,var(--gold-soft),var(--gold));color:#241d05;border:none;}
+  .mi-btn-cyan{background:transparent;border:1px solid var(--cyan);color:var(--cyan);}
+  .mi-btn-danger{background:transparent;border:1px solid var(--blood-bright);color:#f3a3a3;}
+  .mi-btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-dim);}
+  .mi-btn-sm{padding:6px 10px;font-size:11.5px;border-radius:7px;}
+  .mi-field{margin-bottom:12px;}
+  .mi-label{display:block;font-size:11.5px;color:var(--text-dim);margin-bottom:6px;letter-spacing:.03em;}
+  .mi-input, .mi-select{
+    width:100%;background:var(--bg-panel2);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:8px;font-size:13.5px;font-family:'Noto Sans JP',sans-serif;
+  }
+  .mi-input:focus, .mi-select:focus{outline:none;border-color:var(--gold);}
+  .mi-input::placeholder{color:var(--text-faint);}
+  .mi-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .mi-row3{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;}
+  .mi-toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--bg-panel3);
+    border:1px solid var(--gold);color:var(--gold-soft);padding:10px 18px;border-radius:999px;font-size:12.5px;
+    font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:50;white-space:nowrap;
+  }
+
+  .mi-subtabs{display:flex;gap:8px;margin-bottom:14px;}
+  .mi-subtab{padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:700;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;}
+  .mi-subtab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(69,196,176,.1);}
+
+  .mi-chiprow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+  .mi-chip{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--bg-panel2);border:1px solid var(--border);font-size:12px;}
+  .mi-chip-x{cursor:pointer;color:var(--text-faint);font-weight:700;}
+  .mi-chip-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+
+  .mi-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11.5px;color:var(--text-dim);}
+  .mi-legend span{display:inline-flex;align-items:center;gap:6px;}
+  .mi-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  .mi-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .mi-table th{text-align:left;color:var(--text-faint);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--border);font-size:11px;}
+  .mi-table td{padding:8px 6px;border-bottom:1px solid var(--border-soft);color:var(--text);}
+  .mi-table tr:hover td{background:rgba(255,255,255,.02);}
+  .mi-scroll-x{overflow-x:auto;}
+
+  .mi-lockgate{text-align:center;padding:26px 10px;}
+  .mi-lock-icon{font-size:28px;margin-bottom:10px;opacity:.7;}
+  .mi-err{color:var(--down);font-size:12px;margin-top:8px;}
+  .mi-note{font-size:11px;color:var(--text-faint);line-height:1.7;margin-top:14px;}
+  .mi-diff-up{color:var(--up);}
+  .mi-diff-down{color:var(--down);}
+  .mi-footer-note{font-size:11px;color:var(--text-faint);line-height:2;text-align:center;margin-top:6px;}
+
+  .mi-roster-row{display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border-soft);font-size:13px;gap:8px;}
+  .mi-roster-row:last-child{border-bottom:none;}
+  .mi-roster-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mi-roster-actions{display:flex;gap:6px;flex:0 0 auto;}
+
+  .mi-bulk-row{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;padding:6px 0;}
+  .mi-bulk-name{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  @media (max-width:400px){
+    .mi-title{font-size:20px;}
+    .mi-row2{grid-template-columns:1fr;}
+    .mi-bulk-row{grid-template-columns:1fr 96px;}
+  }
+</style>
+
+<div id="mi-root"><div class="mi-wrap" id="mi-app"></div></div>
+
+<script>
+(function(){
+  const WEEKDAYS = ['月','火','水','木','金','土','日'];
+  const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
+  const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
+
+  let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
+  let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
+  let settings = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
+  let toastMsg = null;
+  let toastTimer = null;
+
+  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', bulkDate: todayStr()}; }
+
+  let state = {
+    scope:'internal', // 'internal' | 'cross'
+    tab:'ranking',
+    graphSub:'trend',
+    trendBoss:'月',
+    adminLoggedIn:false,
+    adminErr:false,
+    scopeData:{ internal: freshScoped(), cross: freshScoped() }
+  };
+
+  const app = document.getElementById('mi-app');
+
+  // ---------- storage ----------
+  async function loadMemberEntries(){
+    try{
+      const r = await window.storage.get('entries', true);
+      const arr = r ? JSON.parse(r.value) : [];
+      return arr.map(e=>({...e, name: e.name || e.member || e.clan || ''}));
+    }catch(e){ return []; }
+  }
+  async function saveMemberEntries(){
+    try{ await window.storage.set('entries', JSON.stringify(memberEntries), true); }catch(e){ console.error(e); }
+  }
+  async function loadClanEntries(){
+    try{
+      const r = await window.storage.get('clan-entries', true);
+      const arr = r ? JSON.parse(r.value) : [];
+      return arr.map(e=>({...e, name: e.name || e.clan || ''}));
+    }catch(e){ return []; }
+  }
+  async function saveClanEntries(){
+    try{ await window.storage.set('clan-entries', JSON.stringify(clanEntries), true); }catch(e){ console.error(e); }
+  }
+  async function loadSettings(){
+    try{ const r = await window.storage.get('settings', true); return r ? JSON.parse(r.value) : null; }
+    catch(e){ return null; }
+  }
+  async function saveSettings(){
+    try{ await window.storage.set('settings', JSON.stringify(settings), true); }catch(e){ console.error(e); }
+  }
+
+  function getEntries(scope){ return scope==='internal' ? memberEntries : clanEntries; }
+  function setEntries(scope, arr){ if(scope==='internal') memberEntries = arr; else clanEntries = arr; }
+  async function persistEntries(scope){ return scope==='internal' ? saveMemberEntries() : saveClanEntries(); }
+  function scopeRosterKey(scope){ return scope==='internal' ? 'members' : 'clans'; }
+  function scopeRoster(scope){
+    const fromSettings = settings[scopeRosterKey(scope)] || [];
+    if(fromSettings.length) return fromSettings;
+    return [...new Set(getEntries(scope).map(e=>e.name))].sort();
+  }
+  function scopeAllKnown(scope){
+    return [...new Set([...(settings[scopeRosterKey(scope)]||[]), ...getEntries(scope).map(e=>e.name)])].sort();
+  }
+  function scopeLabel(scope){ return scope==='internal' ? {title:'メンバー', add:'メンバー名', panel:'メンバー管理'} : {title:'クラン', add:'クラン名', panel:'クラン管理'}; }
+  function scopedState(){ return state.scopeData[state.scope]; }
+
+  // ---------- helpers ----------
+  function parseScore(str){
+    if(!str) return NaN;
+    const s = String(str).trim().toUpperCase().replace(/,/g,'');
+    const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMBT]?)$/);
+    if(!m) return NaN;
+    const mult = {'':1,'K':1e3,'M':1e6,'B':1e9,'T':1e12}[m[2]];
+    return parseFloat(m[1]) * mult;
+  }
+  function formatShort(num){
+    if(num>=1e12) return (num/1e12).toFixed(2)+'T';
+    if(num>=1e9) return (num/1e9).toFixed(2)+'B';
+    if(num>=1e6) return (num/1e6).toFixed(2)+'M';
+    if(num>=1e3) return (num/1e3).toFixed(2)+'K';
+    return String(num);
+  }
+  function getWeekday(dateStr){
+    const d = new Date(dateStr+'T00:00:00');
+    const map = ['日','月','火','水','木','金','土'];
+    return map[d.getDay()];
+  }
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateJP(dateStr){
+    const [y,m,d] = dateStr.split('-');
+    return `${m}/${d}(${getWeekday(dateStr)})`;
+  }
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function showToast(msg){
+    toastMsg = msg;
+    render();
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ toastMsg=null; render(); }, 1800);
+  }
+
+  // ---------- render root ----------
+  function render(){
+    app.innerHTML = `
+      ${renderHeader()}
+      ${renderScopeSwitch()}
+      ${renderTabs()}
+      ${state.tab==='ranking' ? renderRanking() : ''}
+      ${state.tab==='graph' ? renderGraph() : ''}
+      ${state.tab==='admin' ? renderAdmin() : ''}
+      <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
+      ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
+    `;
+  }
+
+  function renderHeader(){
+    const clanName = settings.clanName ? esc(settings.clanName) : 'クラン名未設定';
+    return `
+      <div class="mi-header">
+        <div class="mi-eyebrow">ARCHERO 2　·　魔物襲来</div>
+        <div class="mi-banner"><div class="mi-title">${clanName}</div></div>
+        <div class="mi-sub">CLAN &amp; CROSS-SERVER RANKING BOARD</div>
+      </div>`;
+  }
+
+  function renderScopeSwitch(){
+    return `<div class="mi-scopeswitch">
+      <div class="mi-scope-btn ${state.scope==='internal'?'active':''}" data-action="setScope" data-val="internal">🛡 クラン内</div>
+      <div class="mi-scope-btn ${state.scope==='cross'?'active':''}" data-action="setScope" data-val="cross">🌐 クロスサーバー</div>
+    </div>`;
+  }
+
+  function renderTabs(){
+    const tabs = [['ranking','🏆 ランキング'],['graph','📈 グラフ'],['admin','⚙ 管理者']];
+    return `<div class="mi-tabs">${tabs.map(([k,label])=>
+      `<div class="mi-tab ${state.tab===k?'active':''}" data-action="tab" data-val="${k}">${label}</div>`
+    ).join('')}</div>`;
+  }
+
+  // ---------- ranking tab ----------
+  function renderRanking(){
+    const scope = state.scope;
+    const sd = scopedState();
+    const entries = getEntries(scope);
+    const roster = scopeRoster(scope);
+    const lbl = scopeLabel(scope);
+    const dates = [...new Set(entries.map(e=>e.date))].sort();
+    const date = sd.rankDate && dates.includes(sd.rankDate) ? sd.rankDate : (dates.length ? dates[dates.length-1] : null);
+
+    let rows = `<div class="mi-empty">まだデータがありません。<br>管理者パネルからスコアを登録してください。</div>`;
+    let noShowBlock = '';
+    if(date){
+      const list = entries.filter(e=>e.date===date).sort((a,b)=>b.scoreNum-a.scoreNum);
+      rows = list.map((e,i)=>{
+        const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+        const isHome = scope==='cross' && settings.homeClan && e.name===settings.homeClan;
+        return `<div class="mi-rank-row ${rankClass} ${isHome?'home':''}">
+          <div class="mi-rank-num">${i+1}</div>
+          <div class="mi-rank-clan">${esc(e.name)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</div>
+          <div class="mi-rank-score">${esc(e.scoreRaw)}</div>
+        </div>`;
+      }).join('');
+
+      const submitted = new Set(list.map(e=>e.name));
+      const missing = roster.filter(m=>!submitted.has(m));
+      if(missing.length){
+        noShowBlock = `<div class="mi-panel" style="margin-top:12px;">
+          <div class="mi-panel-title" style="font-size:13px;">😴 未参加（${missing.length}${scope==='internal'?'名':'クラン'}）</div>
+          ${missing.map(m=>`<div class="mi-noshow">${esc(m)}</div>`).join('')}
+        </div>`;
+      }
+    }
+
+    const timeInfo = date && settings.updateTimes[date] ? `${fmtDateJP(date)} ${settings.updateTimes[date]} 時点` : (date ? `${fmtDateJP(date)} 時点` : '');
+    const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（全${roster.length}クラン）`;
+
+    return `
+      ${dates.length ? `<div class="mi-pillrow">${dates.map(d=>
+        `<div class="mi-pill ${d===date?'active':''}" data-action="rankDate" data-val="${d}" style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</div>`
+      ).join('')}</div>` : ''}
+      <div class="mi-panel">
+        <div class="mi-panel-title">${panelTitle}</div>
+        ${timeInfo ? `<div class="mi-updated">🕐 ${timeInfo}</div>` : ''}
+        ${rows}
+      </div>
+      ${noShowBlock}`;
+  }
+
+  // ---------- graph tab ----------
+  function renderGraph(){
+    return `
+      <div class="mi-subtabs">
+        <div class="mi-subtab ${state.graphSub==='trend'?'active':''}" data-action="graphSub" data-val="trend">📈 ボス別推移</div>
+        <div class="mi-subtab ${state.graphSub==='compare'?'active':''}" data-action="graphSub" data-val="compare">📋 日別比較</div>
+      </div>
+      ${state.graphSub==='trend' ? renderTrend() : renderCompare()}
+    `;
+  }
+
+  function renderTrend(){
+    const scope = state.scope;
+    const sd = scopedState();
+    const entries = getEntries(scope);
+    const lbl = scopeLabel(scope);
+    const nameOpts = scopeAllKnown(scope).filter(m=>!sd.trendNames.includes(m));
+    const boss = state.trendBoss;
+    const dates = [...new Set(entries.map(e=>e.date))].sort().filter(d=>getWeekday(d)===boss);
+
+    const series = sd.trendNames.map((name,i)=>{
+      const pts = dates.map(d=>{
+        const rec = entries.find(e=>e.date===d && e.name===name);
+        return rec ? rec.scoreNum : null;
+      });
+      return {clan:name, color:LINE_COLORS[i%LINE_COLORS.length], pts};
+    });
+
+    let chart = `<div class="mi-empty">曜日と${lbl.title}を選択するとグラフが表示されます</div>`;
+    if(dates.length && series.length){
+      chart = buildLineChart(dates, series);
+    }
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">ボス（曜日）を選択</div>
+        <div class="mi-pillrow">${WEEKDAYS.map(w=>
+          `<div class="mi-pill ${w===boss?'active':''}" data-action="trendBoss" data-val="${w}">${w} ${BOSS_MAP[w]}</div>`
+        ).join('')}</div>
+
+        <div class="mi-field">
+          <label class="mi-label">${lbl.title}を追加</label>
+          <div class="mi-row2">
+            <select class="mi-select" id="mi-trend-select">
+              ${nameOpts.length ? nameOpts.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('') : `<option value="">${lbl.title}がいません</option>`}
+            </select>
+            <button class="mi-btn" data-action="addTrendName">追加</button>
+          </div>
+        </div>
+
+        <div class="mi-chiprow">
+          ${sd.trendNames.map((m,i)=>`<div class="mi-chip"><span class="mi-chip-dot" style="background:${LINE_COLORS[i%LINE_COLORS.length]}"></span>${esc(m)}<span class="mi-chip-x" data-action="removeTrendName" data-val="${esc(m)}">✕</span></div>`).join('')}
+        </div>
+
+        ${chart}
+      </div>`;
+  }
+
+  function renderCompare(){
+    const scope = state.scope;
+    const sd = scopedState();
+    const entries = getEntries(scope);
+    const lbl = scopeLabel(scope);
+    const dates = [...new Set(entries.map(e=>e.date))].sort();
+    const names = scopeAllKnown(scope);
+    const selDates = sd.cmpDates.length ? sd.cmpDates : dates.slice(-3);
+
+    let table = `<div class="mi-empty">まだデータがありません</div>`;
+    if(names.length && selDates.length){
+      table = `<div class="mi-scroll-x"><table class="mi-table">
+        <thead><tr><th>${lbl.title}</th>${selDates.map(d=>`<th>${fmtDateJP(d)}</th>`).join('')}</tr></thead>
+        <tbody>
+        ${names.map(name=>{
+          const vals = selDates.map(d=>{
+            const rec = entries.find(e=>e.date===d && e.name===name);
+            return rec ? rec.scoreNum : null;
+          });
+          const cells = vals.map((v,i)=>{
+            if(v===null) return `<td>ー</td>`;
+            let diffCls = '';
+            if(i>0 && vals[i-1]!==null){
+              diffCls = v>vals[i-1] ? 'mi-diff-up' : (v<vals[i-1] ? 'mi-diff-down' : '');
+            }
+            const raw = entries.find(e=>e.date===selDates[i] && e.name===name);
+            return `<td class="${diffCls}">${raw?esc(raw.scoreRaw):formatShort(v)}</td>`;
+          }).join('');
+          return `<tr><td>${esc(name)}</td>${cells}</tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+    }
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">比較する日付を選択</div>
+        <div class="mi-chiprow">
+          ${dates.map(d=>{
+            const active = selDates.includes(d);
+            return `<div class="mi-pill ${active?'active':''}" data-action="toggleCmpDate" data-val="${d}" style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</div>`;
+          }).join('')}
+        </div>
+        ${table}
+      </div>`;
+  }
+
+  function buildLineChart(dates, series){
+    const W=560,H=240,padL=44,padR=14,padT=16,padB=30;
+    const allVals = series.flatMap(s=>s.pts).filter(v=>v!==null);
+    if(!allVals.length) return `<div class="mi-empty">選択した項目のデータがありません</div>`;
+    let min = Math.min(...allVals), max = Math.max(...allVals);
+    if(min===max){ min = min*0.9; max = max*1.1 || 1; }
+    const xStep = dates.length>1 ? (W-padL-padR)/(dates.length-1) : 0;
+    const yScale = v => H-padB - ((v-min)/(max-min))*(H-padT-padB);
+    const xScale = i => padL + i*xStep;
+
+    const gridLines = [0,0.25,0.5,0.75,1].map(t=>{
+      const y = padT + t*(H-padT-padB);
+      const val = max - t*(max-min);
+      return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#262c3d" stroke-width="1"/>
+              <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="#8b92a6" font-family="JetBrains Mono">${formatShort(val)}</text>`;
+    }).join('');
+
+    const xLabels = dates.map((d,i)=>{
+      if(dates.length>8 && i%Math.ceil(dates.length/8)!==0) return '';
+      return `<text x="${xScale(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#8b92a6" font-family="JetBrains Mono">${d.slice(5)}</text>`;
+    }).join('');
+
+    const lines = series.map(s=>{
+      let path='', started=false;
+      s.pts.forEach((v,i)=>{
+        if(v===null) return;
+        const cmd = started ? 'L' : 'M';
+        path += `${cmd}${xScale(i).toFixed(1)},${yScale(v).toFixed(1)} `;
+        started = true;
+      });
+      const dots = s.pts.map((v,i)=> v===null ? '' : `<circle cx="${xScale(i).toFixed(1)}" cy="${yScale(v).toFixed(1)}" r="3" fill="${s.color}"/>`).join('');
+      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${dots}`;
+    }).join('');
+
+    const legend = series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.clan)}</span>`).join('');
+
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:10px;">
+      ${gridLines}${xLabels}${lines}
+    </svg>
+    <div class="mi-legend">${legend}</div>`;
+  }
+
+  // ---------- admin tab ----------
+  function renderAdmin(){
+    if(!state.adminLoggedIn){
+      return `
+      <div class="mi-panel mi-lockgate">
+        <div class="mi-lock-icon">🔒</div>
+        <div class="mi-panel-title" style="justify-content:center;">管理者パネル</div>
+        <div class="mi-field" style="text-align:left;max-width:260px;margin:0 auto 10px;">
+          <label class="mi-label">パスワード</label>
+          <input class="mi-input" type="password" id="mi-admin-pw" placeholder="パスワードを入力">
+        </div>
+        <button class="mi-btn mi-btn-gold" data-action="adminLogin">ログイン</button>
+        ${state.adminErr ? `<div class="mi-err">パスワードが違います</div>` : ''}
+      </div>`;
+    }
+
+    const scope = state.scope;
+    const sd = scopedState();
+    const lbl = scopeLabel(scope);
+    const roster = scopeRoster(scope);
+    const bulkDate = sd.bulkDate || todayStr();
+    const entries = getEntries(scope);
+
+    const manageEntries = entries
+      .filter(e=> sd.manageFilter==='all' || e.name===sd.manageFilter)
+      .sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1: a.name.localeCompare(b.name)));
+
+    return `
+      <div class="mi-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="mi-panel-title" style="margin:0;">⚙ 管理者パネル ${scope==='internal'?'（クラン内）':'（クロスサーバー）'}</div>
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="adminLogout">ログアウト</button>
+        </div>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">🛡 クラン設定</div>
+        <div class="mi-field">
+          <label class="mi-label">クラン名（見出しに表示されます）</label>
+          <div class="mi-row2">
+            <input class="mi-input" id="mi-clanname" placeholder="例：紅蓮の牙" value="${esc(settings.clanName||'')}">
+            <button class="mi-btn" data-action="saveClanName">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">👥 ${lbl.panel}</div>
+        <div class="mi-field">
+          <div class="mi-row2">
+            <input class="mi-input" id="mi-new-name" placeholder="${lbl.add}">
+            <button class="mi-btn" data-action="addName">追加</button>
+          </div>
+        </div>
+        ${roster.length ? roster.map(m=>{
+          const isHome = scope==='cross' && settings.homeClan===m;
+          return `
+          <div class="mi-roster-row">
+            <span class="mi-roster-name">${esc(m)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</span>
+            <div class="mi-roster-actions">
+              ${scope==='cross' ? `<button class="mi-btn ${isHome?'mi-btn-cyan':'mi-btn-ghost'} mi-btn-sm" data-action="setHomeClan" data-val="${esc(m)}">${isHome?'★自クラン':'☆自クランに設定'}</button>` : ''}
+              <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="removeName" data-val="${esc(m)}">削除</button>
+            </div>
+          </div>`;
+        }).join('') : `<div class="mi-empty" style="padding:14px 0;">${lbl.title}が登録されていません</div>`}
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">✏️ スコア一括登録</div>
+        <div class="mi-field">
+          <label class="mi-label">日付</label>
+          <input class="mi-input" type="date" id="mi-bulk-date" value="${bulkDate}">
+        </div>
+        ${roster.length ? `
+          <div>
+            ${roster.map((m)=>{
+              const rec = entries.find(e=>e.date===bulkDate && e.name===m);
+              return `<div class="mi-bulk-row">
+                <div class="mi-bulk-name">${esc(m)}</div>
+                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="1.23T" value="${rec?esc(rec.scoreRaw):''}">
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegister">まとめて登録</button></div>
+        ` : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`}
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">🕐 更新時刻</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各日付の更新時刻を設定します（クラン内・クロスサーバー共通）</div>
+        <div class="mi-row2">
+          <div class="mi-field">
+            <label class="mi-label">日付</label>
+            <input class="mi-input" type="date" id="mi-time-date" value="${todayStr()}">
+          </div>
+          <div class="mi-field">
+            <label class="mi-label">時刻</label>
+            <input class="mi-input" type="time" id="mi-time-time">
+          </div>
+        </div>
+        <button class="mi-btn" data-action="saveTime">保存</button>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">🗂 データ管理</div>
+        <div class="mi-pillrow">
+          <div class="mi-pill ${sd.manageFilter==='all'?'active':''}" data-action="manageFilter" data-val="all">全${lbl.title}</div>
+          ${scopeAllKnown(scope).map(m=>`<div class="mi-pill ${sd.manageFilter===m?'active':''}" data-action="manageFilter" data-val="${esc(m)}">${esc(m)}</div>`).join('')}
+        </div>
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>日付</th><th>${lbl.title}</th><th>スコア</th><th></th></tr></thead>
+          <tbody>
+          ${manageEntries.length ? manageEntries.map(e=>`
+            <tr>
+              <td style="font-family:'JetBrains Mono',monospace;">${e.date}</td>
+              <td>${esc(e.name)}</td>
+              <td style="font-family:'JetBrains Mono',monospace;">${esc(e.scoreRaw)}</td>
+              <td><button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deleteEntry" data-val="${e.id}">削除</button></td>
+            </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}
+          </tbody>
+        </table>
+        </div>
+        ${manageEntries.length ? `<div style="margin-top:12px;text-align:right;"><button class="mi-btn mi-btn-danger" data-action="deleteAll">表示中のデータを全削除</button></div>` : ''}
+      </div>
+
+      <div class="mi-note">※ このランキング表とパスワードはこのページを開いた全員で共有されるデータです。実運用する際は独自の認証・バックエンドへの置き換えを推奨します。</div>
+    `;
+  }
+
+  // ---------- event delegation ----------
+  app.addEventListener('click', async (ev)=>{
+    const el = ev.target.closest('[data-action]');
+    if(!el) return;
+    const action = el.dataset.action;
+    const val = el.dataset.val;
+    const scope = state.scope;
+    const sd = scopedState();
+
+    if(action==='setScope'){ state.scope = val; render(); return; }
+    if(action==='tab'){ state.tab = val; render(); return; }
+    if(action==='rankDate'){ sd.rankDate = val; render(); return; }
+    if(action==='graphSub'){ state.graphSub = val; render(); return; }
+    if(action==='trendBoss'){ state.trendBoss = val; render(); return; }
+    if(action==='manageFilter'){ sd.manageFilter = val; render(); return; }
+
+    if(action==='toggleCmpDate'){
+      const i = sd.cmpDates.indexOf(val);
+      if(i>=0) sd.cmpDates.splice(i,1); else sd.cmpDates.push(val);
+      sd.cmpDates.sort();
+      render(); return;
+    }
+
+    if(action==='addTrendName'){
+      const sel = document.getElementById('mi-trend-select');
+      if(sel && sel.value && !sd.trendNames.includes(sel.value)){
+        sd.trendNames.push(sel.value);
+      }
+      render(); return;
+    }
+    if(action==='removeTrendName'){
+      sd.trendNames = sd.trendNames.filter(m=>m!==val);
+      render(); return;
+    }
+
+    if(action==='adminLogin'){
+      const pw = document.getElementById('mi-admin-pw').value;
+      if(pw === settings.password){
+        state.adminLoggedIn = true; state.adminErr = false;
+      } else {
+        state.adminErr = true;
+      }
+      render(); return;
+    }
+    if(action==='adminLogout'){ state.adminLoggedIn = false; render(); return; }
+
+    if(action==='saveClanName'){
+      const name = document.getElementById('mi-clanname').value.trim();
+      settings.clanName = name;
+      await saveSettings();
+      showToast('保存しました');
+      return;
+    }
+
+    if(action==='addName'){
+      const input = document.getElementById('mi-new-name');
+      const name = input.value.trim();
+      if(!name){ showToast(`${scopeLabel(scope).title}名を入力してください`); return; }
+      const key = scopeRosterKey(scope);
+      if(!settings[key]) settings[key] = [];
+      if(settings[key].includes(name)){ showToast('すでに登録されています'); return; }
+      settings[key].push(name);
+      await saveSettings();
+      showToast(`${scopeLabel(scope).title}を追加しました`);
+      return;
+    }
+    if(action==='removeName'){
+      const key = scopeRosterKey(scope);
+      if(confirm(`「${val}」を${scopeLabel(scope).panel}から削除しますか？（過去のスコア記録は残ります）`)){
+        settings[key] = (settings[key]||[]).filter(m=>m!==val);
+        if(scope==='cross' && settings.homeClan===val) settings.homeClan = '';
+        await saveSettings();
+        render();
+      }
+      return;
+    }
+    if(action==='setHomeClan'){
+      settings.homeClan = settings.homeClan===val ? '' : val;
+      await saveSettings();
+      render();
+      return;
+    }
+
+    if(action==='bulkRegister'){
+      const date = document.getElementById('mi-bulk-date').value;
+      if(!date){ showToast('日付を選択してください'); return; }
+      const inputs = document.querySelectorAll('[data-bulk-name]');
+      let arr = getEntries(scope);
+      let saved = 0, skipped = 0;
+      inputs.forEach(inp=>{
+        const name = inp.dataset.bulkName;
+        const raw = inp.value.trim();
+        if(!raw) return;
+        const scoreNum = parseScore(raw);
+        if(isNaN(scoreNum)){ skipped++; return; }
+        const idx = arr.findIndex(e=>e.date===date && e.name===name);
+        const rec = {id: idx>=0 ? arr[idx].id : uid(), date, name, scoreRaw:raw, scoreNum};
+        if(idx>=0) arr[idx] = rec; else arr.push(rec);
+        saved++;
+      });
+      setEntries(scope, arr);
+      await persistEntries(scope);
+      showToast(skipped ? `${saved}件登録（${skipped}件は形式エラーでスキップ）` : `${saved}件登録しました`);
+      return;
+    }
+
+    if(action==='saveTime'){
+      const date = document.getElementById('mi-time-date').value;
+      const time = document.getElementById('mi-time-time').value;
+      if(!date || !time){ showToast('日付と時刻を入力してください'); return; }
+      settings.updateTimes[date] = time;
+      await saveSettings();
+      showToast('保存しました');
+      return;
+    }
+
+    if(action==='deleteEntry'){
+      setEntries(scope, getEntries(scope).filter(e=>e.id!==val));
+      await persistEntries(scope);
+      render();
+      return;
+    }
+    if(action==='deleteAll'){
+      if(confirm('表示中のデータをすべて削除します。よろしいですか？')){
+        const target = sd.manageFilter;
+        const filtered = target==='all' ? [] : getEntries(scope).filter(e=>e.name!==target);
+        setEntries(scope, filtered);
+        await persistEntries(scope);
+        render();
+      }
+      return;
+    }
+  });
+
+  app.addEventListener('change', (ev)=>{
+    if(ev.target.id==='mi-bulk-date'){
+      scopedState().bulkDate = ev.target.value;
+      render();
+    }
+  });
+
+  // ---------- init ----------
+  async function init(){
+    app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ データ読み込み中...</div>`;
+    memberEntries = await loadMemberEntries();
+    clanEntries = await loadClanEntries();
+    let s = await loadSettings();
+    const defaults = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
+    if(!s){
+      settings = defaults;
+      await saveSettings();
+    } else {
+      settings = Object.assign({}, defaults, s);
+    }
+    render();
+  }
+  init();
+})();
+</script>
