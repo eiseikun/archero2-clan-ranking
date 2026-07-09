@@ -1,4 +1,10 @@
 
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クランランキング | 魔物襲来</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;800&family=Cinzel:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
 
@@ -167,20 +173,48 @@
     .mi-bulk-row{grid-template-columns:1fr 96px;}
   }
 </style>
+</head>
+<body>
 
 <div id="mi-root"><div class="mi-wrap" id="mi-app"></div></div>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+  import {
+    getFirestore, doc, setDoc, onSnapshot
+  } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+  // TODO: replace with your own Firebase project config if you fork this
+  const firebaseConfig = {
+    apiKey: "AIzaSyBCBvYwXTGGAGw40lrq0-QBLN_Bm8eqRL4",
+    authDomain: "clan-ranking2.firebaseapp.com",
+    projectId: "clan-ranking2",
+    storageBucket: "clan-ranking2.firebasestorage.app",
+    messagingSenderId: "923540563759",
+    appId: "1:923540563759:web:b056c5bbb3cd1b1de2a3da"
+  };
+  const fbApp = initializeApp(firebaseConfig);
+  const db = getFirestore(fbApp);
+
+  // All shared data lives under a single collection "clanRanking" as 3 documents.
+  const COLLECTION = 'clanRanking';
+  const memberEntriesRef = doc(db, COLLECTION, 'memberEntries');
+  const clanEntriesRef   = doc(db, COLLECTION, 'clanEntries');
+  const settingsRef      = doc(db, COLLECTION, 'settings');
+
 (function(){
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
+  const DEFAULT_SETTINGS = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
 
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
-  let settings = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
+  let settings = {...DEFAULT_SETTINGS};
   let toastMsg = null;
   let toastTimer = null;
+
+  let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
   function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', bulkDate: todayStr()}; }
 
@@ -196,34 +230,49 @@
 
   const app = document.getElementById('mi-app');
 
-  // ---------- storage ----------
-  async function loadMemberEntries(){
-    try{
-      const r = await window.storage.get('entries', true);
-      const arr = r ? JSON.parse(r.value) : [];
-      return arr.map(e=>({...e, name: e.name || e.member || e.clan || ''}));
-    }catch(e){ return []; }
+  // ---------- Firestore storage ----------
+  // Real-time listeners keep every open browser in sync automatically.
+  function normalizeEntries(list, fallbackKeys){
+    return (list||[]).map(e=>{
+      let name = e.name;
+      if(!name){ for(const k of fallbackKeys){ if(e[k]){ name = e[k]; break; } } }
+      return {...e, name: name || ''};
+    });
   }
+
+  function startListeners(){
+    onSnapshot(memberEntriesRef, snap=>{
+      memberEntries = normalizeEntries(snap.exists() ? snap.data().list : [], ['member','clan']);
+      loadedMembers = true;
+      render();
+    }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
+
+    onSnapshot(clanEntriesRef, snap=>{
+      clanEntries = normalizeEntries(snap.exists() ? snap.data().list : [], ['clan']);
+      loadedClans = true;
+      render();
+    }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
+
+    onSnapshot(settingsRef, snap=>{
+      settings = snap.exists() ? Object.assign({}, DEFAULT_SETTINGS, snap.data()) : {...DEFAULT_SETTINGS};
+      loadedSettings = true;
+      render();
+    }, err=>{ console.error(err); showToast('設定の取得に失敗しました'); });
+  }
+
   async function saveMemberEntries(){
-    try{ await window.storage.set('entries', JSON.stringify(memberEntries), true); }catch(e){ console.error(e); }
-  }
-  async function loadClanEntries(){
-    try{
-      const r = await window.storage.get('clan-entries', true);
-      const arr = r ? JSON.parse(r.value) : [];
-      return arr.map(e=>({...e, name: e.name || e.clan || ''}));
-    }catch(e){ return []; }
+    try{ await setDoc(memberEntriesRef, {list: memberEntries}); }
+    catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
   async function saveClanEntries(){
-    try{ await window.storage.set('clan-entries', JSON.stringify(clanEntries), true); }catch(e){ console.error(e); }
-  }
-  async function loadSettings(){
-    try{ const r = await window.storage.get('settings', true); return r ? JSON.parse(r.value) : null; }
-    catch(e){ return null; }
+    try{ await setDoc(clanEntriesRef, {list: clanEntries}); }
+    catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
   async function saveSettings(){
-    try{ await window.storage.set('settings', JSON.stringify(settings), true); }catch(e){ console.error(e); }
+    try{ await setDoc(settingsRef, settings); }
+    catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
+
 
   function getEntries(scope){ return scope==='internal' ? memberEntries : clanEntries; }
   function setEntries(scope, arr){ if(scope==='internal') memberEntries = arr; else clanEntries = arr; }
@@ -280,6 +329,10 @@
 
   // ---------- render root ----------
   function render(){
+    if(!(loadedMembers && loadedClans && loadedSettings)){
+      app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ Firestoreに接続中...</div>`;
+      return;
+    }
     app.innerHTML = `
       ${renderHeader()}
       ${renderScopeSwitch()}
@@ -783,20 +836,13 @@
   });
 
   // ---------- init ----------
-  async function init(){
-    app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ データ読み込み中...</div>`;
-    memberEntries = await loadMemberEntries();
-    clanEntries = await loadClanEntries();
-    let s = await loadSettings();
-    const defaults = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
-    if(!s){
-      settings = defaults;
-      await saveSettings();
-    } else {
-      settings = Object.assign({}, defaults, s);
-    }
-    render();
+  function init(){
+    app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ Firestoreに接続中...</div>`;
+    startListeners();
   }
   init();
 })();
 </script>
+
+</body>
+</html>
