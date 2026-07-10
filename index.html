@@ -76,7 +76,7 @@
   }
   .mi-tab.active{background:linear-gradient(180deg,#2a2033,var(--bg-panel3));color:var(--gold-soft);box-shadow:inset 0 0 0 1px rgba(212,175,55,.35);}
 
-  .mi-pillrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:thin;}
+  .mi-pillrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:thin;-webkit-overflow-scrolling:touch;}
   .mi-pillrow::-webkit-scrollbar{height:4px;}
   .mi-pillrow::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
   .mi-pill{
@@ -104,6 +104,7 @@
   .mi-rank-row.r3 .mi-rank-num{background:linear-gradient(160deg,#e3a877,var(--bronze));color:#2b1908;}
   .mi-rank-clan{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .mi-home-tag{font-size:10px;color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;padding:1px 5px;margin-left:6px;font-weight:700;vertical-align:middle;}
+  .mi-home-row td{background:rgba(69,196,176,.06);}
   .mi-rank-score{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--cyan);font-size:13.5px;}
   .mi-empty{text-align:center;color:var(--text-faint);font-size:13px;padding:30px 10px;line-height:1.8;}
   .mi-noshow{padding:8px 6px;font-size:12.5px;color:var(--text-faint);border-bottom:1px solid var(--border-soft);}
@@ -155,6 +156,20 @@
   .mi-table td{padding:8px 6px;border-bottom:1px solid var(--border-soft);color:var(--text);}
   .mi-table tr:hover td{background:rgba(255,255,255,.02);}
   .mi-scroll-x{overflow-x:auto;}
+
+  .mi-daterange{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;}
+  .mi-date-btn{background:var(--bg-panel2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;text-align:center;}
+  .mi-date-btn.active{border-color:var(--gold);color:var(--gold-soft);}
+  .mi-date-btn:active{border-color:var(--gold);}
+  .mi-cal-panel{background:var(--bg-panel2);border:1px solid var(--border);border-radius:10px;padding:12px;margin:10px 0 16px;}
+  .mi-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .mi-cal-month{font-family:'Shippori Mincho',serif;font-weight:800;color:var(--gold-soft);font-size:14px;}
+  .mi-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .mi-cal-wd{text-align:center;font-size:10px;color:var(--text-faint);padding:4px 0;}
+  .mi-cal-cell{text-align:center;padding:9px 0;border-radius:8px;font-size:12.5px;cursor:pointer;background:var(--bg-panel3);font-family:'JetBrains Mono',monospace;}
+  .mi-cal-cell:hover{background:#2a3244;}
+  .mi-cal-cell.sel{background:linear-gradient(160deg,#f4d874,var(--gold));color:#241d05;font-weight:700;}
+  .mi-cal-cell.mi-cal-empty{cursor:default;background:transparent;}
 
   .mi-lockgate{text-align:center;padding:26px 10px;}
   .mi-lock-icon{font-size:28px;margin-bottom:10px;opacity:.7;}
@@ -213,6 +228,7 @@
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
   const DEFAULT_SETTINGS = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
+  const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
 
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
@@ -222,7 +238,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr()}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -365,6 +381,66 @@
     const [y,m,d] = dateStr.split('-');
     return `${m}/${d}(${getWeekday(dateStr)})`;
   }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function monthOf(dateStr){ return dateStr ? dateStr.slice(0,7) : todayStr().slice(0,7); }
+  function monthLabel(viewMonth){
+    const [y,m] = viewMonth.split('-');
+    return `${y}年${parseInt(m,10)}月`;
+  }
+  function shiftMonth(viewMonth, delta){
+    let [y,m] = viewMonth.split('-').map(Number);
+    m += delta;
+    if(m<1){ m=12; y--; } else if(m>12){ m=1; y++; }
+    return `${y}-${pad2(m)}`;
+  }
+  function buildCalendarGrid(viewMonth, selectedDate){
+    const [y,m] = viewMonth.split('-').map(Number);
+    const firstDow = new Date(y, m-1, 1).getDay();
+    const daysInMonth = new Date(y, m, 0).getDate();
+    let cells = '';
+    for(let i=0;i<firstDow;i++) cells += `<div class="mi-cal-cell mi-cal-empty"></div>`;
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${pad2(m)}-${pad2(d)}`;
+      const isSel = dateStr===selectedDate;
+      cells += `<div class="mi-cal-cell ${isSel?'sel':''}" data-action="pickCalDate" data-val="${dateStr}">${d}</div>`;
+    }
+    const weekdayHeader = ['日','月','火','水','木','金','土'].map(w=>`<div class="mi-cal-wd">${w}</div>`).join('');
+    return `
+      <div class="mi-cal-panel">
+        <div class="mi-cal-header">
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="calPrevMonth" type="button">‹</button>
+          <div class="mi-cal-month">${monthLabel(viewMonth)}</div>
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="calNextMonth" type="button">›</button>
+        </div>
+        <div class="mi-cal-grid">${weekdayHeader}${cells}</div>
+      </div>`;
+  }
+  // Renders a "開始日/終了日" pair of tappable date buttons plus an inline calendar
+  // that opens under whichever one was tapped. fieldPrefix namespaces state/DOM ids
+  // so multiple date-range pickers can coexist (e.g. table tab vs graph tab).
+  function renderDateRangePicker(sd, startVal, endVal){
+    const openField = sd.calOpenField;
+    const startLabel = startVal ? fmtDateJP(startVal) : '選択してください';
+    const endLabel = endVal ? fmtDateJP(endVal) : '選択してください';
+    let calendar = '';
+    if(openField){
+      const selected = openField==='start' ? startVal : endVal;
+      const viewMonth = sd.calViewMonth || monthOf(selected);
+      calendar = buildCalendarGrid(viewMonth, selected);
+    }
+    return `
+      <div class="mi-daterange">
+        <div class="mi-field">
+          <label class="mi-label">開始日</label>
+          <div class="mi-date-btn ${openField==='start'?'active':''}" data-action="openCal" data-val="start">${startLabel}</div>
+        </div>
+        <div class="mi-field">
+          <label class="mi-label">終了日</label>
+          <div class="mi-date-btn ${openField==='end'?'active':''}" data-action="openCal" data-val="end">${endLabel}</div>
+        </div>
+      </div>
+      ${calendar}`;
+  }
   function uid(){ return Math.random().toString(36).slice(2,10); }
   function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function showToast(msg){
@@ -372,6 +448,27 @@
     render();
     clearTimeout(toastTimer);
     toastTimer = setTimeout(()=>{ toastMsg=null; render(); }, 1800);
+  }
+
+  // ---------- daily ranking helper (shared by ranking tab and table tab) ----------
+  // Uses explicit e.rank when present (e.g. imported from CSV); otherwise falls back
+  // to sorting by score for that date.
+  function getRankedListForDate(scope, date){
+    const dayEntries = getEntries(scope).filter(e=>e.date===date);
+    const hasRank = dayEntries.some(e=>e.rank!=null);
+    const list = hasRank
+      ? [...dayEntries].sort((a,b)=>{
+          const ar = a.rank==null ? Infinity : a.rank;
+          const br = b.rank==null ? Infinity : b.rank;
+          if(ar!==br) return ar-br;
+          return (b.scoreNum||0)-(a.scoreNum||0);
+        })
+      : [...dayEntries].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0));
+    return list.map((e,i)=>({...e, displayRank: e.rank!=null ? e.rank : (i+1)}));
+  }
+  function getRankForNameOnDate(scope, date, name){
+    const rec = getRankedListForDate(scope, date).find(e=>e.name===name);
+    return rec ? rec.displayRank : null;
   }
 
   // ---------- CSV import / export ----------
@@ -482,16 +579,26 @@
       app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ Firestoreに接続中...</div>`;
       return;
     }
+    // preserve horizontal scroll position of pill rows across full re-renders
+    const scrollPositions = {};
+    app.querySelectorAll('[data-preserve-scroll]').forEach(el=>{ scrollPositions[el.id]=el.scrollLeft; });
+
     app.innerHTML = `
       ${renderHeader()}
       ${renderScopeSwitch()}
       ${renderTabs()}
       ${state.tab==='ranking' ? renderRanking() : ''}
       ${state.tab==='graph' ? renderGraph() : ''}
+      ${state.tab==='table' ? renderTable() : ''}
       ${state.tab==='admin' ? renderAdmin() : ''}
       <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
       ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
     `;
+
+    Object.keys(scrollPositions).forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.scrollLeft = scrollPositions[id];
+    });
   }
 
   function renderHeader(){
@@ -512,7 +619,7 @@
   }
 
   function renderTabs(){
-    const tabs = [['ranking','🏆 ランキング'],['graph','📈 グラフ'],['admin','⚙ 管理者']];
+    const tabs = [['ranking','🏆 ランキング'],['graph','📈 グラフ'],['table','📋 表'],['admin','⚙ 管理者']];
     return `<div class="mi-tabs">${tabs.map(([k,label])=>
       `<div class="mi-tab ${state.tab===k?'active':''}" data-action="tab" data-val="${k}">${label}</div>`
     ).join('')}</div>`;
@@ -525,8 +632,8 @@
     const entries = getEntries(scope);
     const roster = scopeRoster(scope);
     const lbl = scopeLabel(scope);
-    const dates = [...new Set(entries.map(e=>e.date))].sort();
-    const date = sd.rankDate && dates.includes(sd.rankDate) ? sd.rankDate : (dates.length ? dates[dates.length-1] : null);
+    const dates = [...new Set(entries.map(e=>e.date))].sort().reverse();
+    const date = sd.rankDate && dates.includes(sd.rankDate) ? sd.rankDate : (dates.length ? dates[0] : null);
 
     let rows = `<div class="mi-empty">まだデータがありません。<br>管理者パネルからスコアを登録してください。</div>`;
     let noShowBlock = '';
@@ -566,7 +673,7 @@
     const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（全${roster.length}クラン）`;
 
     return `
-      ${dates.length ? `<div class="mi-pillrow">${dates.map(d=>
+      ${dates.length ? `<div class="mi-pillrow" id="mi-rank-date-pillrow" data-preserve-scroll>${dates.map(d=>
         `<div class="mi-pill ${d===date?'active':''}" data-action="rankDate" data-val="${d}" style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</div>`
       ).join('')}</div>` : ''}
       <div class="mi-panel">
@@ -721,6 +828,125 @@
       ${gridLines}${xLabels}${lines}
     </svg>
     <div class="mi-legend">${legend}</div>`;
+  }
+
+  // ---------- table tab ----------
+  function renderTable(){
+    return state.scope==='internal' ? renderTableInternal() : renderTableCross();
+  }
+
+  function renderTableInternal(){
+    const sd = scopedState();
+    return `
+      <div class="mi-subtabs">
+        <div class="mi-subtab ${sd.tableSub==='avgRank'?'active':''}" data-action="tableSub" data-val="avgRank">平均順位</div>
+        <div class="mi-subtab ${sd.tableSub==='bestScore'?'active':''}" data-action="tableSub" data-val="bestScore">個人別最高スコア</div>
+      </div>
+      ${sd.tableSub==='avgRank' ? renderAvgRankTable() : renderBestScoreTable()}
+    `;
+  }
+
+  function renderTableCross(){
+    const scope = 'cross';
+    const entries = getEntries(scope);
+    const roster = scopeAllKnown(scope);
+
+    const rows = roster.map(name=>{
+      const cells = WEEKDAYS.map(w=>{
+        const matches = entries.filter(e=>e.name===name && e.scoreNum!=null && getWeekday(e.date)===w);
+        if(!matches.length) return null;
+        const best = matches.reduce((a,b)=> b.scoreNum>a.scoreNum?b:a);
+        return best.scoreRaw;
+      });
+      return {name, cells};
+    });
+
+    const isHome = n => settings.homeClan && n===settings.homeClan;
+    const body = rows.length ? rows.map(r=>`
+      <tr class="${isHome(r.name)?'mi-home-row':''}">
+        <td>${esc(r.name)}${isHome(r.name)?'<span class="mi-home-tag">自クラン</span>':''}</td>
+        ${r.cells.map(c=>`<td style="font-family:'JetBrains Mono',monospace;">${c?esc(c):'ー'}</td>`).join('')}
+      </tr>
+    `).join('') : `<tr><td colspan="8" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">🏅 曜日別クラン最高記録</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各クランがその曜日（ボス）で過去に出した最高スコアを表示します。</div>
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>クラン</th>${WEEKDAYS.map(w=>`<th>${w}<br><span style="font-weight:400;">${BOSS_MAP[w]}</span></th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        </div>
+      </div>`;
+  }
+
+  function renderAvgRankTable(){
+    const scope = 'internal';
+    const sd = scopedState();
+    const entries = getEntries(scope);
+    const allDatesAsc = [...new Set(entries.map(e=>e.date))].sort();
+    const start = sd.tableRangeStart || (allDatesAsc[0]||todayStr());
+    const end = sd.tableRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
+    const activeDates = allDatesAsc.filter(d=> d>=start && d<=end);
+
+    const roster = scopeAllKnown(scope);
+    let rows = roster.map(name=>{
+      if(!activeDates.length) return null;
+      const ranks = activeDates.map(d=>{
+        const r = getRankForNameOnDate(scope, d, name);
+        return r==null ? UNRANKED : r;
+      });
+      const avg = ranks.reduce((a,b)=>a+b,0)/ranks.length;
+      return {name, avg};
+    }).filter(r=> r && r.avg < UNRANKED - 1e-9);
+    rows.sort((a,b)=>a.avg-b.avg);
+
+    const body = rows.length ? rows.map((r,i)=>`
+      <tr><td>${i+1}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${r.avg.toFixed(2)}</td></tr>
+    `).join('') : `<tr><td colspan="3" style="text-align:center;color:var(--text-faint);padding:20px 0;">対象期間にランクインしたデータがありません</td></tr>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">📊 平均順位</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">指定期間中、15位以内に入れなかった日は16位として平均を計算します（一度も入れなかった人は表示されません）。</div>
+        ${renderDateRangePicker(sd, start, end)}
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>順位</th><th>名前</th><th>平均順位</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        </div>
+      </div>`;
+  }
+
+  function renderBestScoreTable(){
+    const scope = 'internal';
+    const entries = getEntries(scope);
+    const roster = scopeAllKnown(scope);
+    let rows = roster.map(name=>{
+      const own = entries.filter(e=>e.name===name && e.scoreNum!=null);
+      if(!own.length) return null;
+      const best = own.reduce((a,b)=> b.scoreNum>a.scoreNum?b:a);
+      return {name, best: best.scoreNum, date: best.date, scoreRaw: best.scoreRaw};
+    }).filter(Boolean);
+    rows.sort((a,b)=>b.best-a.best);
+
+    const body = rows.length ? rows.map((r,i)=>`
+      <tr><td>${i+1}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${esc(r.scoreRaw)}</td><td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(r.date)}</td></tr>
+    `).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">スコアデータがありません</td></tr>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">🏅 個人別最高スコア</div>
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>順位</th><th>名前</th><th>最高スコア</th><th>達成日</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        </div>
+      </div>`;
   }
 
   // ---------- admin tab ----------
@@ -912,6 +1138,37 @@
     if(action==='graphSub'){ state.graphSub = val; render(); return; }
     if(action==='trendBoss'){ state.trendBoss = val; render(); return; }
     if(action==='manageFilter'){ sd.manageFilter = val; render(); return; }
+    if(action==='tableSub'){ sd.tableSub = val; render(); return; }
+
+    if(action==='openCal'){
+      if(sd.calOpenField===val){
+        sd.calOpenField = null;
+      } else {
+        sd.calOpenField = val;
+        const current = val==='start' ? sd.tableRangeStart : sd.tableRangeEnd;
+        sd.calViewMonth = monthOf(current);
+      }
+      render(); return;
+    }
+    if(action==='calPrevMonth'){
+      sd.calViewMonth = shiftMonth(sd.calViewMonth || monthOf(null), -1);
+      render(); return;
+    }
+    if(action==='calNextMonth'){
+      sd.calViewMonth = shiftMonth(sd.calViewMonth || monthOf(null), 1);
+      render(); return;
+    }
+    if(action==='pickCalDate'){
+      if(sd.calOpenField==='start'){
+        sd.tableRangeStart = val;
+        if(sd.tableRangeEnd && val>sd.tableRangeEnd) sd.tableRangeEnd = val;
+      } else if(sd.calOpenField==='end'){
+        sd.tableRangeEnd = val;
+        if(sd.tableRangeStart && val<sd.tableRangeStart) sd.tableRangeStart = val;
+      }
+      sd.calOpenField = null;
+      render(); return;
+    }
     if(action==='manageSort'){
       if(sd.manageSortKey===val){ sd.manageSortDir = sd.manageSortDir==='asc'?'desc':'asc'; }
       else { sd.manageSortKey = val; sd.manageSortDir = (val==='rank') ? 'asc' : 'desc'; }
