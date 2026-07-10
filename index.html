@@ -87,6 +87,9 @@
 
   .mi-panel{background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;}
   .mi-panel-title{font-family:'Shippori Mincho',serif;font-weight:800;font-size:15px;color:var(--gold-soft);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .mi-collapse-toggle{cursor:pointer;user-select:none;justify-content:space-between;margin-bottom:0;}
+  .mi-collapsible .mi-collapse-body{margin-top:12px;}
+  .mi-chevron{color:var(--text-faint);font-size:12px;}
   .mi-updated{font-size:11px;color:var(--text-faint);margin-bottom:10px;font-family:'JetBrains Mono',monospace;}
 
   .mi-rank-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--border-soft);border-left:3px solid transparent;}
@@ -147,6 +150,8 @@
 
   .mi-table{width:100%;border-collapse:collapse;font-size:12px;}
   .mi-table th{text-align:left;color:var(--text-faint);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--border);font-size:11px;}
+  .mi-table th.mi-sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+  .mi-table th.mi-sortable:hover{color:var(--gold-soft);}
   .mi-table td{padding:8px 6px;border-bottom:1px solid var(--border-soft);color:var(--text);}
   .mi-table tr:hover td{background:rgba(255,255,255,.02);}
   .mi-scroll-x{overflow-x:auto;}
@@ -217,7 +222,12 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', bulkDate: todayStr()}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr()}; }
+
+  const DEFAULT_COLLAPSE_OPEN = {
+    clanSettings:false, roster:false, bulkRegister:true,
+    csvImport:false, csvExport:false, updateTime:false, dataManage:false
+  };
 
   let state = {
     scope:'internal', // 'internal' | 'cross'
@@ -226,8 +236,23 @@
     trendBoss:'月',
     adminLoggedIn:false,
     adminErr:false,
+    collapse:{},
     scopeData:{ internal: freshScoped(), cross: freshScoped() }
   };
+
+  function isPanelOpen(key){
+    if(!(key in state.collapse)) state.collapse[key] = DEFAULT_COLLAPSE_OPEN[key] || false;
+    return state.collapse[key];
+  }
+  function collapsiblePanel(key, title, bodyHtml){
+    const open = isPanelOpen(key);
+    return `<div class="mi-panel mi-collapsible">
+      <div class="mi-panel-title mi-collapse-toggle" data-action="toggleCollapse" data-val="${key}">
+        <span>${title}</span><span class="mi-chevron">${open?'▾':'▸'}</span>
+      </div>
+      ${open ? `<div class="mi-collapse-body">${bodyHtml}</div>` : ''}
+    </div>`;
+  }
 
   const app = document.getElementById('mi-app');
 
@@ -294,17 +319,38 @@
   function parseScore(str){
     if(!str) return NaN;
     const s = String(str).trim().toUpperCase().replace(/,/g,'');
-    const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMBT]?)$/);
+    const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMBTE]?)$/);
     if(!m) return NaN;
-    const mult = {'':1,'K':1e3,'M':1e6,'B':1e9,'T':1e12}[m[2]];
+    const mult = {'':1,'K':1e3,'M':1e6,'B':1e9,'T':1e12,'E':1e15}[m[2]];
     return parseFloat(m[1]) * mult;
   }
   function formatShort(num){
+    if(num>=1e15) return (num/1e15).toFixed(2)+'E';
     if(num>=1e12) return (num/1e12).toFixed(2)+'T';
     if(num>=1e9) return (num/1e9).toFixed(2)+'B';
     if(num>=1e6) return (num/1e6).toFixed(2)+'M';
     if(num>=1e3) return (num/1e3).toFixed(2)+'K';
     return String(num);
+  }
+  function trimNum(n){
+    let s = n.toFixed(2);
+    if(s.indexOf('.')>=0) s = s.replace(/0+$/,'').replace(/\.$/,'');
+    return s;
+  }
+  // Scope-specific CSV number convention:
+  //  - cross (clan vs clan): bare number = T, e.g. "631.87" -> "631.87T". If >=1000T, switch to E ("1.5E" = 1500T).
+  //  - internal (clan members): bare number = B (no suffix), e.g. "24.04" stays "24.04". If >=1000B, switch to T ("8.67T" = 8670B).
+  function scopeUnitConfig(scope){
+    return scope==='cross'
+      ? {mult:1e12, unit:'T', upMult:1e15, upUnit:'E', showBaseSuffix:true}
+      : {mult:1e9,  unit:'B', upMult:1e12, upUnit:'T', showBaseSuffix:false};
+  }
+  function formatScoreForScope(scoreNum, scope){
+    if(scoreNum==null || isNaN(scoreNum)) return '';
+    const cfg = scopeUnitConfig(scope);
+    const baseCount = scoreNum/cfg.mult;
+    if(baseCount >= 1000) return trimNum(scoreNum/cfg.upMult) + cfg.upUnit;
+    return cfg.showBaseSuffix ? (trimNum(baseCount)+cfg.unit) : trimNum(baseCount);
   }
   function getWeekday(dateStr){
     const d = new Date(dateStr+'T00:00:00');
@@ -346,29 +392,27 @@
     }
     return map;
   }
-  function scoreHeaderHasTUnit(headerStr){ return /\(\s*t\s*\)/i.test(headerStr||''); }
   function parseDateFlexible(s){
     if(s==null) return null;
     const m = String(s).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if(!m) return null;
     return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
   }
-  function parseImportedScore(raw, unitHint){
+  function parseImportedScore(raw, scope){
     if(raw==null) return {scoreRaw:'', scoreNum:null};
     const s = String(raw).trim();
     if(s===''||s==='-'||s==='ー') return {scoreRaw:'', scoreNum:null};
-    if(unitHint==='T'){
-      const num = parseFloat(s.replace(/,/g,''));
-      if(isNaN(num)) return {scoreRaw:'', scoreNum:null};
-      return {scoreRaw: num+'T', scoreNum: num*1e12};
-    }
-    if(/[KMBT]$/i.test(s)){
+    let scoreNum;
+    if(/[KMBTE]$/i.test(s)){
       const withSuffix = parseScore(s);
-      if(!isNaN(withSuffix)) return {scoreRaw:s, scoreNum:withSuffix};
+      if(isNaN(withSuffix)) return {scoreRaw:'', scoreNum:null};
+      scoreNum = withSuffix;
+    } else {
+      const plain = parseFloat(s.replace(/,/g,''));
+      if(isNaN(plain)) return {scoreRaw:'', scoreNum:null};
+      scoreNum = plain * scopeUnitConfig(scope).mult; // bare number = scope's base unit
     }
-    const plain = parseFloat(s.replace(/,/g,''));
-    if(isNaN(plain)) return {scoreRaw:'', scoreNum:null};
-    return {scoreRaw:s, scoreNum:plain};
+    return {scoreRaw: formatScoreForScope(scoreNum, scope), scoreNum};
   }
   function parseImportedRank(raw){
     if(raw==null) return null;
@@ -385,8 +429,7 @@
       reader.readAsText(file, 'UTF-8');
     });
   }
-  function importRowsToEntries(rows, headerMap, existingArr){
-    const unitHint = scoreHeaderHasTUnit(headerMap.score) ? 'T' : null;
+  function importRowsToEntries(rows, headerMap, existingArr, scope){
     let arr = [...existingArr];
     let added=0, updated=0, skipped=0;
     const newNames = new Set();
@@ -394,7 +437,7 @@
       const date = headerMap.date ? parseDateFlexible(row[headerMap.date]) : null;
       const name = headerMap.name ? String(row[headerMap.name]||'').trim() : '';
       if(!date || !name){ skipped++; return; }
-      const {scoreRaw, scoreNum} = headerMap.score ? parseImportedScore(row[headerMap.score], unitHint) : {scoreRaw:'', scoreNum:null};
+      const {scoreRaw, scoreNum} = headerMap.score ? parseImportedScore(row[headerMap.score], scope) : {scoreRaw:'', scoreNum:null};
       const rank = headerMap.rank ? parseImportedRank(row[headerMap.rank]) : null;
       if(scoreNum===null && rank===null){ skipped++; return; }
       const idx = arr.findIndex(e=>e.date===date && e.name===name);
@@ -415,10 +458,10 @@
     });
     return {arr, added, updated, skipped, newNames};
   }
-  function entriesToCsv(entries, lbl){
+  function entriesToCsv(entries, lbl, scope){
     const rows = [['date', lbl.title==='クラン'?'clan':'member', 'score', 'rank']];
     [...entries].sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:a.name.localeCompare(b.name)))
-      .forEach(e=> rows.push([e.date, e.name, e.scoreRaw||'', e.rank!=null?e.rank:'']));
+      .forEach(e=> rows.push([e.date, e.name, formatScoreForScope(e.scoreNum, scope), e.rank!=null?e.rank:'']));
     return rows.map(r=>r.map(v=>{
       const s = String(v);
       return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
@@ -703,9 +746,24 @@
     const bulkDate = sd.bulkDate || todayStr();
     const entries = getEntries(scope);
 
+    const allDatesForScope = [...new Set(entries.map(e=>e.date))].sort();
     const manageEntries = entries
       .filter(e=> sd.manageFilter==='all' || e.name===sd.manageFilter)
-      .sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1: a.name.localeCompare(b.name)));
+      .filter(e=> sd.manageDateFilter==='all' || e.date===sd.manageDateFilter)
+      .sort((a,b)=>{
+        const dir = sd.manageSortDir==='asc' ? 1 : -1;
+        let av,bv;
+        switch(sd.manageSortKey){
+          case 'name': av=a.name; bv=b.name; break;
+          case 'score': av=a.scoreNum==null?-Infinity:a.scoreNum; bv=b.scoreNum==null?-Infinity:b.scoreNum; break;
+          case 'rank': av=a.rank==null?Infinity:a.rank; bv=b.rank==null?Infinity:b.rank; break;
+          default: av=a.date; bv=b.date;
+        }
+        if(av<bv) return -1*dir;
+        if(av>bv) return 1*dir;
+        return a.name.localeCompare(b.name);
+      });
+    const sortArrow = k => sd.manageSortKey===k ? (sd.manageSortDir==='asc'?' ▲':' ▼') : '';
 
     return `
       <div class="mi-panel">
@@ -715,8 +773,7 @@
         </div>
       </div>
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">🛡 クラン設定</div>
+      ${collapsiblePanel('clanSettings', '🛡 クラン設定', `
         <div class="mi-field">
           <label class="mi-label">クラン名（見出しに表示されます）</label>
           <div class="mi-row2">
@@ -724,10 +781,9 @@
             <button class="mi-btn" data-action="saveClanName">保存</button>
           </div>
         </div>
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">👥 ${lbl.panel}</div>
+      ${collapsiblePanel('roster', `👥 ${lbl.panel}`, `
         <div class="mi-field">
           <div class="mi-row2">
             <input class="mi-input" id="mi-new-name" placeholder="${lbl.add}">
@@ -745,10 +801,9 @@
             </div>
           </div>`;
         }).join('') : `<div class="mi-empty" style="padding:14px 0;">${lbl.title}が登録されていません</div>`}
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">✏️ スコア一括登録</div>
+      ${collapsiblePanel('bulkRegister', '✏️ スコア一括登録', `
         <div class="mi-field">
           <label class="mi-label">日付</label>
           <input class="mi-input" type="date" id="mi-bulk-date" value="${bulkDate}">
@@ -765,29 +820,27 @@
           </div>
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegister">まとめて登録</button></div>
         ` : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`}
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）</div>
+      ${collapsiblePanel('csvImport', `📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">
           対応する列（表記ゆれOK）: <b>date</b>（日付）, <b>${lbl.title==='クラン'?'clan':'member'}</b>（名前）,
-          <b>score</b>（スコア。「score(T)」ならT単位として計算）, <b>rank</b>（順位・任意）。<br>
+          <b>score</b>（スコア。数値のみなら${scope==='cross'?'T単位':'B単位'}として計算し、1000を超えたら自動で${scope==='cross'?'E':'T'}表記にします）,
+          <b>rank</b>（順位・任意）。<br>
           同じ日付・同じ${lbl.title}のデータが既にある場合は上書き（未入力の項目は既存値を維持）します。
         </div>
         <div class="mi-row2">
           <input class="mi-input" type="file" id="mi-csv-file" accept=".csv">
           <button class="mi-btn mi-btn-gold" data-action="csvImport">取り込む</button>
         </div>
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">📤 CSVエクスポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）</div>
+      ${collapsiblePanel('csvExport', `📤 CSVエクスポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">現在表示中のスコープ（${lbl.title}）の全データをCSVでダウンロードします。</div>
         <button class="mi-btn" data-action="csvExport">CSVをダウンロード</button>
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">🕐 更新時刻</div>
+      ${collapsiblePanel('updateTime', '🕐 更新時刻', `
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各日付の更新時刻を設定します（クラン内・クロスサーバー共通）</div>
         <div class="mi-row2">
           <div class="mi-field">
@@ -800,17 +853,30 @@
           </div>
         </div>
         <button class="mi-btn" data-action="saveTime">保存</button>
-      </div>
+      `)}
 
-      <div class="mi-panel">
-        <div class="mi-panel-title">🗂 データ管理</div>
+      ${collapsiblePanel('dataManage', '🗂 データ管理', `
+        <div class="mi-label">${lbl.title}で絞り込み</div>
         <div class="mi-pillrow">
           <div class="mi-pill ${sd.manageFilter==='all'?'active':''}" data-action="manageFilter" data-val="all">全${lbl.title}</div>
           ${scopeAllKnown(scope).map(m=>`<div class="mi-pill ${sd.manageFilter===m?'active':''}" data-action="manageFilter" data-val="${esc(m)}">${esc(m)}</div>`).join('')}
         </div>
+        <div class="mi-field" style="max-width:220px;">
+          <label class="mi-label">日付で絞り込み</label>
+          <select class="mi-select" id="mi-manage-date-filter">
+            <option value="all" ${sd.manageDateFilter==='all'?'selected':''}>すべての日付</option>
+            ${allDatesForScope.map(d=>`<option value="${d}" ${sd.manageDateFilter===d?'selected':''}>${fmtDateJP(d)}</option>`).join('')}
+          </select>
+        </div>
         <div class="mi-scroll-x">
         <table class="mi-table">
-          <thead><tr><th>日付</th><th>${lbl.title}</th><th>スコア</th><th>順位</th><th></th></tr></thead>
+          <thead><tr>
+            <th class="mi-sortable" data-action="manageSort" data-val="date">日付${sortArrow('date')}</th>
+            <th class="mi-sortable" data-action="manageSort" data-val="name">${lbl.title}${sortArrow('name')}</th>
+            <th class="mi-sortable" data-action="manageSort" data-val="score">スコア${sortArrow('score')}</th>
+            <th class="mi-sortable" data-action="manageSort" data-val="rank">順位${sortArrow('rank')}</th>
+            <th></th>
+          </tr></thead>
           <tbody>
           ${manageEntries.length ? manageEntries.map(e=>`
             <tr>
@@ -823,8 +889,9 @@
           </tbody>
         </table>
         </div>
+        <div class="mi-note" style="margin-bottom:0;">${manageEntries.length}件表示中</div>
         ${manageEntries.length ? `<div style="margin-top:12px;text-align:right;"><button class="mi-btn mi-btn-danger" data-action="deleteAll">表示中のデータを全削除</button></div>` : ''}
-      </div>
+      `)}
 
       <div class="mi-note">※ このランキング表とパスワードはこのページを開いた全員で共有されるデータです。実運用する際は独自の認証・バックエンドへの置き換えを推奨します。</div>
     `;
@@ -845,6 +912,15 @@
     if(action==='graphSub'){ state.graphSub = val; render(); return; }
     if(action==='trendBoss'){ state.trendBoss = val; render(); return; }
     if(action==='manageFilter'){ sd.manageFilter = val; render(); return; }
+    if(action==='manageSort'){
+      if(sd.manageSortKey===val){ sd.manageSortDir = sd.manageSortDir==='asc'?'desc':'asc'; }
+      else { sd.manageSortKey = val; sd.manageSortDir = (val==='rank') ? 'asc' : 'desc'; }
+      render(); return;
+    }
+    if(action==='toggleCollapse'){
+      state.collapse[val] = !isPanelOpen(val);
+      render(); return;
+    }
 
     if(action==='toggleCmpDate'){
       const i = sd.cmpDates.indexOf(val);
@@ -950,7 +1026,7 @@
           return;
         }
         const existing = getEntries(scope);
-        const {arr, added, updated, skipped, newNames} = importRowsToEntries(parsed.data, headerMap, existing);
+        const {arr, added, updated, skipped, newNames} = importRowsToEntries(parsed.data, headerMap, existing, scope);
         setEntries(scope, arr);
         await persistEntries(scope);
 
@@ -970,7 +1046,7 @@
     }
 
     if(action==='csvExport'){
-      const csv = entriesToCsv(getEntries(scope), scopeLabel(scope));
+      const csv = entriesToCsv(getEntries(scope), scopeLabel(scope), scope);
       const fname = (scope==='internal' ? 'member_entries_' : 'clan_entries_') + todayStr() + '.csv';
       downloadCsv(fname, csv);
       return;
@@ -1007,6 +1083,10 @@
   app.addEventListener('change', (ev)=>{
     if(ev.target.id==='mi-bulk-date'){
       scopedState().bulkDate = ev.target.value;
+      render();
+    }
+    if(ev.target.id==='mi-manage-date-filter'){
+      scopedState().manageDateFilter = ev.target.value;
       render();
     }
   });
