@@ -173,6 +173,7 @@
     .mi-bulk-row{grid-template-columns:1fr 96px;}
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
@@ -327,6 +328,111 @@
     toastTimer = setTimeout(()=>{ toastMsg=null; render(); }, 1800);
   }
 
+  // ---------- CSV import / export ----------
+  const CSV_HEADER_ALIASES = {
+    date: ['date','日付'],
+    name: ['name','clan','member','クラン','メンバー','クラン名','メンバー名'],
+    score: ['score(t)','score（t）','score','スコア'],
+    rank: ['rank','順位']
+  };
+  function detectCsvHeaders(fields){
+    const norm = fields.map(f=>({orig:f, low:String(f).trim().toLowerCase()}));
+    const map = {};
+    for(const key of Object.keys(CSV_HEADER_ALIASES)){
+      for(const alias of CSV_HEADER_ALIASES[key]){
+        const hit = norm.find(f=>f.low===alias.toLowerCase());
+        if(hit){ map[key]=hit.orig; break; }
+      }
+    }
+    return map;
+  }
+  function scoreHeaderHasTUnit(headerStr){ return /\(\s*t\s*\)/i.test(headerStr||''); }
+  function parseDateFlexible(s){
+    if(s==null) return null;
+    const m = String(s).trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if(!m) return null;
+    return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  }
+  function parseImportedScore(raw, unitHint){
+    if(raw==null) return {scoreRaw:'', scoreNum:null};
+    const s = String(raw).trim();
+    if(s===''||s==='-'||s==='ー') return {scoreRaw:'', scoreNum:null};
+    if(unitHint==='T'){
+      const num = parseFloat(s.replace(/,/g,''));
+      if(isNaN(num)) return {scoreRaw:'', scoreNum:null};
+      return {scoreRaw: num+'T', scoreNum: num*1e12};
+    }
+    if(/[KMBT]$/i.test(s)){
+      const withSuffix = parseScore(s);
+      if(!isNaN(withSuffix)) return {scoreRaw:s, scoreNum:withSuffix};
+    }
+    const plain = parseFloat(s.replace(/,/g,''));
+    if(isNaN(plain)) return {scoreRaw:'', scoreNum:null};
+    return {scoreRaw:s, scoreNum:plain};
+  }
+  function parseImportedRank(raw){
+    if(raw==null) return null;
+    const s = String(raw).trim();
+    if(s===''||s==='-') return null;
+    const n = parseInt(s,10);
+    return isNaN(n) ? null : n;
+  }
+  function readFileAsText(file){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(String(reader.result||'').replace(/^\uFEFF/,''));
+      reader.onerror = reject;
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+  function importRowsToEntries(rows, headerMap, existingArr){
+    const unitHint = scoreHeaderHasTUnit(headerMap.score) ? 'T' : null;
+    let arr = [...existingArr];
+    let added=0, updated=0, skipped=0;
+    const newNames = new Set();
+    rows.forEach(row=>{
+      const date = headerMap.date ? parseDateFlexible(row[headerMap.date]) : null;
+      const name = headerMap.name ? String(row[headerMap.name]||'').trim() : '';
+      if(!date || !name){ skipped++; return; }
+      const {scoreRaw, scoreNum} = headerMap.score ? parseImportedScore(row[headerMap.score], unitHint) : {scoreRaw:'', scoreNum:null};
+      const rank = headerMap.rank ? parseImportedRank(row[headerMap.rank]) : null;
+      if(scoreNum===null && rank===null){ skipped++; return; }
+      const idx = arr.findIndex(e=>e.date===date && e.name===name);
+      if(idx>=0){
+        const prev = arr[idx];
+        arr[idx] = {
+          id: prev.id, date, name,
+          scoreRaw: scoreRaw!=='' ? scoreRaw : prev.scoreRaw,
+          scoreNum: scoreNum!==null ? scoreNum : prev.scoreNum,
+          rank: rank!==null ? rank : (prev.rank!=null ? prev.rank : null)
+        };
+        updated++;
+      } else {
+        arr.push({id: uid(), date, name, scoreRaw, scoreNum: scoreNum===null?null:scoreNum, rank});
+        added++;
+      }
+      newNames.add(name);
+    });
+    return {arr, added, updated, skipped, newNames};
+  }
+  function entriesToCsv(entries, lbl){
+    const rows = [['date', lbl.title==='クラン'?'clan':'member', 'score', 'rank']];
+    [...entries].sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:a.name.localeCompare(b.name)))
+      .forEach(e=> rows.push([e.date, e.name, e.scoreRaw||'', e.rank!=null?e.rank:'']));
+    return rows.map(r=>r.map(v=>{
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(',')).join('\n');
+  }
+  function downloadCsv(filename, csvText){
+    const blob = new Blob(['\uFEFF'+csvText], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // ---------- render root ----------
   function render(){
     if(!(loadedMembers && loadedClans && loadedSettings)){
@@ -382,14 +488,24 @@
     let rows = `<div class="mi-empty">まだデータがありません。<br>管理者パネルからスコアを登録してください。</div>`;
     let noShowBlock = '';
     if(date){
-      const list = entries.filter(e=>e.date===date).sort((a,b)=>b.scoreNum-a.scoreNum);
+      const dayEntries = entries.filter(e=>e.date===date);
+      const hasRank = dayEntries.some(e=>e.rank!=null);
+      const list = hasRank
+        ? [...dayEntries].sort((a,b)=>{
+            const ar = a.rank==null ? Infinity : a.rank;
+            const br = b.rank==null ? Infinity : b.rank;
+            if(ar!==br) return ar-br;
+            return (b.scoreNum||0)-(a.scoreNum||0);
+          })
+        : [...dayEntries].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0));
       rows = list.map((e,i)=>{
         const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
         const isHome = scope==='cross' && settings.homeClan && e.name===settings.homeClan;
+        const displayRank = e.rank!=null ? e.rank : (i+1);
         return `<div class="mi-rank-row ${rankClass} ${isHome?'home':''}">
-          <div class="mi-rank-num">${i+1}</div>
+          <div class="mi-rank-num">${displayRank}</div>
           <div class="mi-rank-clan">${esc(e.name)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</div>
-          <div class="mi-rank-score">${esc(e.scoreRaw)}</div>
+          <div class="mi-rank-score">${e.scoreRaw ? esc(e.scoreRaw) : 'ー'}</div>
         </div>`;
       }).join('');
 
@@ -652,6 +768,25 @@
       </div>
 
       <div class="mi-panel">
+        <div class="mi-panel-title">📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">
+          対応する列（表記ゆれOK）: <b>date</b>（日付）, <b>${lbl.title==='クラン'?'clan':'member'}</b>（名前）,
+          <b>score</b>（スコア。「score(T)」ならT単位として計算）, <b>rank</b>（順位・任意）。<br>
+          同じ日付・同じ${lbl.title}のデータが既にある場合は上書き（未入力の項目は既存値を維持）します。
+        </div>
+        <div class="mi-row2">
+          <input class="mi-input" type="file" id="mi-csv-file" accept=".csv">
+          <button class="mi-btn mi-btn-gold" data-action="csvImport">取り込む</button>
+        </div>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">📤 CSVエクスポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">現在表示中のスコープ（${lbl.title}）の全データをCSVでダウンロードします。</div>
+        <button class="mi-btn" data-action="csvExport">CSVをダウンロード</button>
+      </div>
+
+      <div class="mi-panel">
         <div class="mi-panel-title">🕐 更新時刻</div>
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各日付の更新時刻を設定します（クラン内・クロスサーバー共通）</div>
         <div class="mi-row2">
@@ -675,15 +810,16 @@
         </div>
         <div class="mi-scroll-x">
         <table class="mi-table">
-          <thead><tr><th>日付</th><th>${lbl.title}</th><th>スコア</th><th></th></tr></thead>
+          <thead><tr><th>日付</th><th>${lbl.title}</th><th>スコア</th><th>順位</th><th></th></tr></thead>
           <tbody>
           ${manageEntries.length ? manageEntries.map(e=>`
             <tr>
               <td style="font-family:'JetBrains Mono',monospace;">${e.date}</td>
               <td>${esc(e.name)}</td>
-              <td style="font-family:'JetBrains Mono',monospace;">${esc(e.scoreRaw)}</td>
+              <td style="font-family:'JetBrains Mono',monospace;">${e.scoreRaw?esc(e.scoreRaw):'ー'}</td>
+              <td style="font-family:'JetBrains Mono',monospace;">${e.rank!=null?e.rank:'ー'}</td>
               <td><button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deleteEntry" data-val="${e.id}">削除</button></td>
-            </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}
+            </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}
           </tbody>
         </table>
         </div>
@@ -797,6 +933,46 @@
       setEntries(scope, arr);
       await persistEntries(scope);
       showToast(skipped ? `${saved}件登録（${skipped}件は形式エラーでスキップ）` : `${saved}件登録しました`);
+      return;
+    }
+
+    if(action==='csvImport'){
+      const fileInput = document.getElementById('mi-csv-file');
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if(!file){ showToast('CSVファイルを選択してください'); return; }
+      if(typeof Papa === 'undefined'){ showToast('CSV解析ライブラリの読み込みに失敗しました'); return; }
+      try{
+        const text = await readFileAsText(file);
+        const parsed = Papa.parse(text, {header:true, skipEmptyLines:true});
+        const headerMap = detectCsvHeaders(parsed.meta.fields || []);
+        if(!headerMap.date || !headerMap.name){
+          showToast('date列と名前の列が見つかりませんでした');
+          return;
+        }
+        const existing = getEntries(scope);
+        const {arr, added, updated, skipped, newNames} = importRowsToEntries(parsed.data, headerMap, existing);
+        setEntries(scope, arr);
+        await persistEntries(scope);
+
+        const key = scopeRosterKey(scope);
+        if(!settings[key]) settings[key] = [];
+        let rosterAdded = 0;
+        newNames.forEach(n=>{ if(!settings[key].includes(n)){ settings[key].push(n); rosterAdded++; } });
+        if(rosterAdded) await saveSettings();
+
+        fileInput.value = '';
+        showToast(`追加${added}件・更新${updated}件（${skipped}件スキップ）`);
+      }catch(err){
+        console.error(err);
+        showToast('CSVの読み込みに失敗しました');
+      }
+      return;
+    }
+
+    if(action==='csvExport'){
+      const csv = entriesToCsv(getEntries(scope), scopeLabel(scope));
+      const fname = (scope==='internal' ? 'member_entries_' : 'clan_entries_') + todayStr() + '.csv';
+      downloadCsv(fname, csv);
       return;
     }
 
