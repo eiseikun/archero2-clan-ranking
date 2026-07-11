@@ -103,6 +103,8 @@
   .mi-rank-row.r2 .mi-rank-num{background:linear-gradient(160deg,#e4e9ee,var(--silver));color:#232830;}
   .mi-rank-row.r3 .mi-rank-num{background:linear-gradient(160deg,#e3a877,var(--bronze));color:#2b1908;}
   .mi-rank-clan{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mi-name-link{cursor:pointer;text-underline-offset:3px;text-decoration:underline dotted rgba(232,207,122,.4);}
+  .mi-name-link:active{opacity:.6;}
   .mi-home-tag{font-size:10px;color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;padding:1px 5px;margin-left:6px;font-weight:700;vertical-align:middle;}
   .mi-home-row td{background:rgba(69,196,176,.06);}
   .mi-rank-score{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--cyan);font-size:13.5px;}
@@ -172,6 +174,12 @@
   .mi-cal-cell.mi-cal-empty{cursor:default;background:transparent;}
 
   .mi-lockgate{text-align:center;padding:26px 10px;}
+  .mi-modal-backdrop{position:fixed;inset:0;background:rgba(5,6,10,.72);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);}
+  .mi-modal{background:var(--bg-panel);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;padding:18px;}
+  @media (min-width:560px){
+    .mi-modal-backdrop{align-items:center;padding:20px;}
+    .mi-modal{border-radius:16px;max-height:76vh;}
+  }
   .mi-lock-icon{font-size:28px;margin-bottom:10px;opacity:.7;}
   .mi-err{color:var(--down);font-size:12px;margin-top:8px;}
   .mi-note{font-size:11px;color:var(--text-faint);line-height:1.7;margin-top:14px;}
@@ -179,10 +187,12 @@
   .mi-diff-down{color:var(--down);}
   .mi-footer-note{font-size:11px;color:var(--text-faint);line-height:2;text-align:center;margin-top:6px;}
 
-  .mi-roster-row{display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border-soft);font-size:13px;gap:8px;}
+  .mi-roster-row{display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border-soft);font-size:13px;gap:8px;flex-wrap:wrap;}
   .mi-roster-row:last-child{border-bottom:none;}
-  .mi-roster-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .mi-roster-actions{display:flex;gap:6px;flex:0 0 auto;}
+  .mi-roster-check{flex:0 0 auto;display:flex;align-items:center;}
+  .mi-roster-check input{width:16px;height:16px;accent-color:var(--gold);cursor:pointer;}
+  .mi-roster-name{flex:1;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mi-roster-actions{display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;}
 
   .mi-bulk-row{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;padding:6px 0;}
   .mi-bulk-name{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -227,8 +237,9 @@
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
-  const DEFAULT_SETTINGS = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:''};
+  const DEFAULT_SETTINGS = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
   const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
+  const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
@@ -238,7 +249,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], cmpDates:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -248,11 +259,10 @@
   let state = {
     scope:'internal', // 'internal' | 'cross'
     tab:'ranking',
-    graphSub:'trend',
-    trendBoss:'月',
     adminLoggedIn:false,
     adminErr:false,
     collapse:{},
+    modal:null, // {scope, name} | null
     scopeData:{ internal: freshScoped(), cross: freshScoped() }
   };
 
@@ -325,8 +335,22 @@
     if(fromSettings.length) return fromSettings;
     return [...new Set(getEntries(scope).map(e=>e.name))].sort();
   }
+  // Preserves the admin-defined roster order (settings.members / settings.clans),
+  // appending any names only found in entries (e.g. legacy data) alphabetically at the end.
   function scopeAllKnown(scope){
-    return [...new Set([...(settings[scopeRosterKey(scope)]||[]), ...getEntries(scope).map(e=>e.name)])].sort();
+    const roster = settings[scopeRosterKey(scope)] || [];
+    const extra = [...new Set(getEntries(scope).map(e=>e.name))].filter(n=>!roster.includes(n)).sort();
+    return [...roster, ...extra];
+  }
+  // Visibility: settings.visibility[scope] is an array of names to show.
+  // If undefined for that scope, everything is visible (default / backward compatible).
+  function isNameVisible(scope, name){
+    const vis = settings.visibility && settings.visibility[scope];
+    if(!vis) return true;
+    return vis.includes(name);
+  }
+  function getVisibleRoster(scope){
+    return scopeAllKnown(scope).filter(n=>isNameVisible(scope, n));
   }
   function scopeLabel(scope){ return scope==='internal' ? {title:'メンバー', add:'メンバー名', panel:'メンバー管理'} : {title:'クラン', add:'クラン名', panel:'クラン管理'}; }
   function scopedState(){ return state.scopeData[state.scope]; }
@@ -416,15 +440,17 @@
       </div>`;
   }
   // Renders a "開始日/終了日" pair of tappable date buttons plus an inline calendar
-  // that opens under whichever one was tapped. fieldPrefix namespaces state/DOM ids
-  // so multiple date-range pickers can coexist (e.g. table tab vs graph tab).
-  function renderDateRangePicker(sd, startVal, endVal){
-    const openField = sd.calOpenField;
+  // that opens under whichever one was tapped. `target` namespaces the open/selected
+  // state (e.g. "table" vs "graph") so multiple pickers can coexist per scope.
+  function renderDateRangePicker(sd, startVal, endVal, target){
+    const openKey = sd.calOpenField; // e.g. "table:start" / "graph:end" / null
+    const isOpenStart = openKey === `${target}:start`;
+    const isOpenEnd = openKey === `${target}:end`;
     const startLabel = startVal ? fmtDateJP(startVal) : '選択してください';
     const endLabel = endVal ? fmtDateJP(endVal) : '選択してください';
     let calendar = '';
-    if(openField){
-      const selected = openField==='start' ? startVal : endVal;
+    if(isOpenStart || isOpenEnd){
+      const selected = isOpenStart ? startVal : endVal;
       const viewMonth = sd.calViewMonth || monthOf(selected);
       calendar = buildCalendarGrid(viewMonth, selected);
     }
@@ -432,11 +458,11 @@
       <div class="mi-daterange">
         <div class="mi-field">
           <label class="mi-label">開始日</label>
-          <div class="mi-date-btn ${openField==='start'?'active':''}" data-action="openCal" data-val="start">${startLabel}</div>
+          <div class="mi-date-btn ${isOpenStart?'active':''}" data-action="openCal" data-val="${target}:start">${startLabel}</div>
         </div>
         <div class="mi-field">
           <label class="mi-label">終了日</label>
-          <div class="mi-date-btn ${openField==='end'?'active':''}" data-action="openCal" data-val="end">${endLabel}</div>
+          <div class="mi-date-btn ${isOpenEnd?'active':''}" data-action="openCal" data-val="${target}:end">${endLabel}</div>
         </div>
       </div>
       ${calendar}`;
@@ -593,6 +619,7 @@
       ${state.tab==='admin' ? renderAdmin() : ''}
       <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
       ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
+      ${state.modal ? renderModal() : ''}
     `;
 
     Object.keys(scrollPositions).forEach(id=>{
@@ -638,29 +665,20 @@
     let rows = `<div class="mi-empty">まだデータがありません。<br>管理者パネルからスコアを登録してください。</div>`;
     let noShowBlock = '';
     if(date){
-      const dayEntries = entries.filter(e=>e.date===date);
-      const hasRank = dayEntries.some(e=>e.rank!=null);
-      const list = hasRank
-        ? [...dayEntries].sort((a,b)=>{
-            const ar = a.rank==null ? Infinity : a.rank;
-            const br = b.rank==null ? Infinity : b.rank;
-            if(ar!==br) return ar-br;
-            return (b.scoreNum||0)-(a.scoreNum||0);
-          })
-        : [...dayEntries].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0));
+      const list = getRankedListForDate(scope, date);
       rows = list.map((e,i)=>{
+        if(!isNameVisible(scope, e.name)) return '';
         const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
         const isHome = scope==='cross' && settings.homeClan && e.name===settings.homeClan;
-        const displayRank = e.rank!=null ? e.rank : (i+1);
         return `<div class="mi-rank-row ${rankClass} ${isHome?'home':''}">
-          <div class="mi-rank-num">${displayRank}</div>
-          <div class="mi-rank-clan">${esc(e.name)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</div>
+          <div class="mi-rank-num">${e.displayRank}</div>
+          <div class="mi-rank-clan mi-name-link" data-action="showHistory" data-val="${esc(e.name)}">${esc(e.name)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</div>
           <div class="mi-rank-score">${e.scoreRaw ? esc(e.scoreRaw) : 'ー'}</div>
         </div>`;
       }).join('');
 
       const submitted = new Set(list.map(e=>e.name));
-      const missing = roster.filter(m=>!submitted.has(m));
+      const missing = roster.filter(m=>!submitted.has(m) && isNameVisible(scope, m));
       if(missing.length){
         noShowBlock = `<div class="mi-panel" style="margin-top:12px;">
           <div class="mi-panel-title" style="font-size:13px;">😴 未参加（${missing.length}${scope==='internal'?'名':'クラン'}）</div>
@@ -670,7 +688,7 @@
     }
 
     const timeInfo = date && settings.updateTimes[date] ? `${fmtDateJP(date)} ${settings.updateTimes[date]} 時点` : (date ? `${fmtDateJP(date)} 時点` : '');
-    const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（全${roster.length}クラン）`;
+    const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（表示中${getVisibleRoster(scope).length}クラン）`;
 
     return `
       ${dates.length ? `<div class="mi-pillrow" id="mi-rank-date-pillrow" data-preserve-scroll>${dates.map(d=>
@@ -679,58 +697,118 @@
       <div class="mi-panel">
         <div class="mi-panel-title">${panelTitle}</div>
         ${timeInfo ? `<div class="mi-updated">🕐 ${timeInfo}</div>` : ''}
+        ${date ? `<div class="mi-note" style="margin-top:-6px;margin-bottom:10px;">名前をタップすると日別の順位履歴を見られます</div>` : ''}
         ${rows}
       </div>
       ${noShowBlock}`;
   }
 
-  // ---------- graph tab ----------
-  function renderGraph(){
+  // ---------- history modal (date x rank detail for a tapped name) ----------
+  function renderModal(){
+    const {scope, name} = state.modal;
+    const dates = [...new Set(getEntries(scope).filter(e=>e.name===name).map(e=>e.date))].sort().reverse();
+    const rows = dates.map(d=>{
+      const rec = getRankedListForDate(scope, d).find(e=>e.name===name);
+      return `<tr>
+        <td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</td>
+        <td>${rec && rec.displayRank!=null ? rec.displayRank+'位' : 'ー'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;">${rec && rec.scoreRaw ? esc(rec.scoreRaw) : 'ー'}</td>
+      </tr>`;
+    }).join('');
+
     return `
-      <div class="mi-subtabs">
-        <div class="mi-subtab ${state.graphSub==='trend'?'active':''}" data-action="graphSub" data-val="trend">📈 ボス別推移</div>
-        <div class="mi-subtab ${state.graphSub==='compare'?'active':''}" data-action="graphSub" data-val="compare">📋 日別比較</div>
-      </div>
-      ${state.graphSub==='trend' ? renderTrend() : renderCompare()}
-    `;
+      <div class="mi-modal-backdrop" data-action="closeModal">
+        <div class="mi-modal" data-action="noop">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <div class="mi-panel-title" style="margin:0;">${esc(name)} の履歴</div>
+            <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="closeModal">閉じる</button>
+          </div>
+          <div class="mi-scroll-x">
+          <table class="mi-table">
+            <thead><tr><th>日付</th><th>順位</th><th>スコア</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}</tbody>
+          </table>
+          </div>
+        </div>
+      </div>`;
   }
 
-  function renderTrend(){
-    const scope = state.scope;
+  // ---------- graph tab ----------
+  function renderGraph(){
+    return renderGraphUnified(state.scope);
+  }
+
+  // ボス別推移をベースに統合したグラフ（曜日/期間の切り替え、スコア/ランキングの切り替え）
+  // クラン内・クロスサーバーの両方で共通利用
+  function renderGraphUnified(scope){
     const sd = scopedState();
     const entries = getEntries(scope);
     const lbl = scopeLabel(scope);
-    const nameOpts = scopeAllKnown(scope).filter(m=>!sd.trendNames.includes(m));
-    const boss = state.trendBoss;
-    const dates = [...new Set(entries.map(e=>e.date))].sort().filter(d=>getWeekday(d)===boss);
+    const allDatesAsc = [...new Set(entries.map(e=>e.date))].sort();
+
+    const rangeStart = sd.graphRangeStart || (allDatesAsc[0]||todayStr());
+    const rangeEnd = sd.graphRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
+
+    let dates;
+    if(sd.graphMode==='range'){
+      dates = allDatesAsc.filter(d=> d>=rangeStart && d<=rangeEnd);
+    } else {
+      dates = allDatesAsc.filter(d=>getWeekday(d)===sd.graphBoss);
+    }
+
+    const nameOpts = getVisibleRoster(scope).filter(m=>!sd.trendNames.includes(m));
+    const metric = sd.graphMetric;
 
     const series = sd.trendNames.map((name,i)=>{
       const pts = dates.map(d=>{
+        if(metric==='rank') return getRankForNameOnDate(scope, d, name);
         const rec = entries.find(e=>e.date===d && e.name===name);
         return rec ? rec.scoreNum : null;
       });
       return {clan:name, color:LINE_COLORS[i%LINE_COLORS.length], pts};
     });
 
-    let chart = `<div class="mi-empty">曜日と${lbl.title}を選択するとグラフが表示されます</div>`;
-    if(dates.length && series.length){
-      chart = buildLineChart(dates, series);
+    let chart = `<div class="mi-empty">${lbl.title}を追加するとグラフが表示されます</div>`;
+    if(!dates.length){
+      chart = `<div class="mi-empty">対象期間にデータがありません</div>`;
+    } else if(series.length){
+      chart = buildLineChart(dates, series, {
+        invert: metric==='rank',
+        labelFormatter: metric==='rank' ? (v)=>Math.round(v)+'位' : formatShort
+      });
     }
 
     return `
       <div class="mi-panel">
-        <div class="mi-panel-title">ボス（曜日）を選択</div>
-        <div class="mi-pillrow">${WEEKDAYS.map(w=>
-          `<div class="mi-pill ${w===boss?'active':''}" data-action="trendBoss" data-val="${w}">${w} ${BOSS_MAP[w]}</div>`
-        ).join('')}</div>
+        <div class="mi-panel-title">比較方法</div>
+        <div class="mi-subtabs">
+          <div class="mi-subtab ${sd.graphMode==='weekday'?'active':''}" data-action="graphMode" data-val="weekday">曜日で比較</div>
+          <div class="mi-subtab ${sd.graphMode==='range'?'active':''}" data-action="graphMode" data-val="range">期間で比較</div>
+        </div>
 
-        <div class="mi-field">
+        ${sd.graphMode==='weekday' ? `
+          <div class="mi-pillrow" id="mi-graph-boss-pillrow" data-preserve-scroll>${WEEKDAYS.map(w=>
+            `<div class="mi-pill ${w===sd.graphBoss?'active':''}" data-action="graphBoss" data-val="${w}">${w} ${BOSS_MAP[w]}</div>`
+          ).join('')}</div>
+        ` : renderDateRangePicker(sd, rangeStart, rangeEnd, 'graph')}
+
+        <div class="mi-panel-title" style="margin-top:14px;">表示する指標</div>
+        <div class="mi-subtabs">
+          <div class="mi-subtab ${metric==='rank'?'active':''}" data-action="graphMetric" data-val="rank">ランキングの推移</div>
+          <div class="mi-subtab ${metric==='score'?'active':''}" data-action="graphMetric" data-val="score">スコアの推移</div>
+        </div>
+
+        <div class="mi-field" style="margin-top:14px;">
           <label class="mi-label">${lbl.title}を追加</label>
           <div class="mi-row2">
             <select class="mi-select" id="mi-trend-select">
               ${nameOpts.length ? nameOpts.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('') : `<option value="">${lbl.title}がいません</option>`}
             </select>
             <button class="mi-btn" data-action="addTrendName">追加</button>
+          </div>
+          <div style="margin-top:8px;">
+            <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="addAllTrendNames">全${lbl.title}を追加</button>
+            ${sd.trendNames.length ? `<button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="clearTrendNames" style="margin-left:8px;">すべて解除</button>` : ''}
           </div>
         </div>
 
@@ -742,67 +820,26 @@
       </div>`;
   }
 
-  function renderCompare(){
-    const scope = state.scope;
-    const sd = scopedState();
-    const entries = getEntries(scope);
-    const lbl = scopeLabel(scope);
-    const dates = [...new Set(entries.map(e=>e.date))].sort();
-    const names = scopeAllKnown(scope);
-    const selDates = sd.cmpDates.length ? sd.cmpDates : dates.slice(-3);
-
-    let table = `<div class="mi-empty">まだデータがありません</div>`;
-    if(names.length && selDates.length){
-      table = `<div class="mi-scroll-x"><table class="mi-table">
-        <thead><tr><th>${lbl.title}</th>${selDates.map(d=>`<th>${fmtDateJP(d)}</th>`).join('')}</tr></thead>
-        <tbody>
-        ${names.map(name=>{
-          const vals = selDates.map(d=>{
-            const rec = entries.find(e=>e.date===d && e.name===name);
-            return rec ? rec.scoreNum : null;
-          });
-          const cells = vals.map((v,i)=>{
-            if(v===null) return `<td>ー</td>`;
-            let diffCls = '';
-            if(i>0 && vals[i-1]!==null){
-              diffCls = v>vals[i-1] ? 'mi-diff-up' : (v<vals[i-1] ? 'mi-diff-down' : '');
-            }
-            const raw = entries.find(e=>e.date===selDates[i] && e.name===name);
-            return `<td class="${diffCls}">${raw?esc(raw.scoreRaw):formatShort(v)}</td>`;
-          }).join('');
-          return `<tr><td>${esc(name)}</td>${cells}</tr>`;
-        }).join('')}
-        </tbody></table></div>`;
-    }
-
-    return `
-      <div class="mi-panel">
-        <div class="mi-panel-title">比較する日付を選択</div>
-        <div class="mi-chiprow">
-          ${dates.map(d=>{
-            const active = selDates.includes(d);
-            return `<div class="mi-pill ${active?'active':''}" data-action="toggleCmpDate" data-val="${d}" style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</div>`;
-          }).join('')}
-        </div>
-        ${table}
-      </div>`;
-  }
-
-  function buildLineChart(dates, series){
+  function buildLineChart(dates, series, opts){
+    opts = opts || {};
+    const invert = !!opts.invert;
+    const labelFormatter = opts.labelFormatter || formatShort;
     const W=560,H=240,padL=44,padR=14,padT=16,padB=30;
     const allVals = series.flatMap(s=>s.pts).filter(v=>v!==null);
     if(!allVals.length) return `<div class="mi-empty">選択した項目のデータがありません</div>`;
     let min = Math.min(...allVals), max = Math.max(...allVals);
-    if(min===max){ min = min*0.9; max = max*1.1 || 1; }
+    if(min===max){ min = min-1; max = max+1; }
     const xStep = dates.length>1 ? (W-padL-padR)/(dates.length-1) : 0;
-    const yScale = v => H-padB - ((v-min)/(max-min))*(H-padT-padB);
+    const yScale = invert
+      ? (v => padT + ((v-min)/(max-min))*(H-padT-padB))
+      : (v => H-padB - ((v-min)/(max-min))*(H-padT-padB));
     const xScale = i => padL + i*xStep;
 
     const gridLines = [0,0.25,0.5,0.75,1].map(t=>{
       const y = padT + t*(H-padT-padB);
-      const val = max - t*(max-min);
+      const val = invert ? (min + t*(max-min)) : (max - t*(max-min));
       return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#262c3d" stroke-width="1"/>
-              <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="#8b92a6" font-family="JetBrains Mono">${formatShort(val)}</text>`;
+              <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="#8b92a6" font-family="JetBrains Mono">${labelFormatter(val)}</text>`;
     }).join('');
 
     const xLabels = dates.map((d,i)=>{
@@ -849,7 +886,7 @@
   function renderTableCross(){
     const scope = 'cross';
     const entries = getEntries(scope);
-    const roster = scopeAllKnown(scope);
+    const roster = getVisibleRoster(scope);
 
     const rows = roster.map(name=>{
       const cells = WEEKDAYS.map(w=>{
@@ -911,7 +948,7 @@
       <div class="mi-panel">
         <div class="mi-panel-title">📊 平均順位</div>
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">指定期間中、15位以内に入れなかった日は16位として平均を計算します（一度も入れなかった人は表示されません）。</div>
-        ${renderDateRangePicker(sd, start, end)}
+        ${renderDateRangePicker(sd, start, end, 'table')}
         <div class="mi-scroll-x">
         <table class="mi-table">
           <thead><tr><th>順位</th><th>名前</th><th>平均順位</th></tr></thead>
@@ -1016,12 +1053,26 @@
             <button class="mi-btn" data-action="addName">追加</button>
           </div>
         </div>
-        ${roster.length ? roster.map(m=>{
+        ${roster.length ? `
+        <div class="mi-note" style="margin-top:0;">チェックを外すとランキング・グラフ・表から非表示になります（並び順は↑↓で変更できます）。</div>
+        <div style="margin:8px 0 12px;">
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="selectAllVisible">全${lbl.title}を表示</button>
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="clearAllVisible" style="margin-left:8px;">全て非表示</button>
+          ${scope==='cross' ? `<button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="applyPresetOrder" style="margin-left:8px;">指定の順番に並び替える</button>` : ''}
+        </div>
+        ` : ''}
+        ${roster.length ? roster.map((m,i)=>{
           const isHome = scope==='cross' && settings.homeClan===m;
+          const visible = isNameVisible(scope, m);
           return `
           <div class="mi-roster-row">
+            <label class="mi-roster-check">
+              <input type="checkbox" data-action="toggleVisible" data-val="${esc(m)}" ${visible?'checked':''}>
+            </label>
             <span class="mi-roster-name">${esc(m)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</span>
             <div class="mi-roster-actions">
+              <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="moveNameUp" data-val="${esc(m)}" ${i===0?'disabled':''}>↑</button>
+              <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="moveNameDown" data-val="${esc(m)}" ${i===roster.length-1?'disabled':''}>↓</button>
               ${scope==='cross' ? `<button class="mi-btn ${isHome?'mi-btn-cyan':'mi-btn-ghost'} mi-btn-sm" data-action="setHomeClan" data-val="${esc(m)}">${isHome?'★自クラン':'☆自クランに設定'}</button>` : ''}
               <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="removeName" data-val="${esc(m)}">削除</button>
             </div>
@@ -1132,20 +1183,27 @@
     const scope = state.scope;
     const sd = scopedState();
 
-    if(action==='setScope'){ state.scope = val; render(); return; }
+    if(action==='setScope'){ state.scope = val; state.modal = null; render(); return; }
     if(action==='tab'){ state.tab = val; render(); return; }
     if(action==='rankDate'){ sd.rankDate = val; render(); return; }
-    if(action==='graphSub'){ state.graphSub = val; render(); return; }
-    if(action==='trendBoss'){ state.trendBoss = val; render(); return; }
+    if(action==='graphMode'){ sd.graphMode = val; render(); return; }
+    if(action==='graphMetric'){ sd.graphMetric = val; render(); return; }
+    if(action==='graphBoss'){ sd.graphBoss = val; render(); return; }
     if(action==='manageFilter'){ sd.manageFilter = val; render(); return; }
     if(action==='tableSub'){ sd.tableSub = val; render(); return; }
 
+    if(action==='noop'){ return; }
+    if(action==='showHistory'){ state.modal = {scope, name: val}; render(); return; }
+    if(action==='closeModal'){ state.modal = null; render(); return; }
+
     if(action==='openCal'){
+      // val is like "table:start" or "graph:end"
       if(sd.calOpenField===val){
         sd.calOpenField = null;
       } else {
         sd.calOpenField = val;
-        const current = val==='start' ? sd.tableRangeStart : sd.tableRangeEnd;
+        const [target, field] = val.split(':');
+        const current = sd[`${target}Range${field==='start'?'Start':'End'}`];
         sd.calViewMonth = monthOf(current);
       }
       render(); return;
@@ -1159,12 +1217,16 @@
       render(); return;
     }
     if(action==='pickCalDate'){
-      if(sd.calOpenField==='start'){
-        sd.tableRangeStart = val;
-        if(sd.tableRangeEnd && val>sd.tableRangeEnd) sd.tableRangeEnd = val;
-      } else if(sd.calOpenField==='end'){
-        sd.tableRangeEnd = val;
-        if(sd.tableRangeStart && val<sd.tableRangeStart) sd.tableRangeStart = val;
+      if(sd.calOpenField){
+        const [target, field] = sd.calOpenField.split(':');
+        const startKey = `${target}RangeStart`, endKey = `${target}RangeEnd`;
+        if(field==='start'){
+          sd[startKey] = val;
+          if(sd[endKey] && val>sd[endKey]) sd[endKey] = val;
+        } else {
+          sd[endKey] = val;
+          if(sd[startKey] && val<sd[startKey]) sd[startKey] = val;
+        }
       }
       sd.calOpenField = null;
       render(); return;
@@ -1179,13 +1241,6 @@
       render(); return;
     }
 
-    if(action==='toggleCmpDate'){
-      const i = sd.cmpDates.indexOf(val);
-      if(i>=0) sd.cmpDates.splice(i,1); else sd.cmpDates.push(val);
-      sd.cmpDates.sort();
-      render(); return;
-    }
-
     if(action==='addTrendName'){
       const sel = document.getElementById('mi-trend-select');
       if(sel && sel.value && !sd.trendNames.includes(sel.value)){
@@ -1195,6 +1250,14 @@
     }
     if(action==='removeTrendName'){
       sd.trendNames = sd.trendNames.filter(m=>m!==val);
+      render(); return;
+    }
+    if(action==='addAllTrendNames'){
+      sd.trendNames = getVisibleRoster(scope).slice();
+      render(); return;
+    }
+    if(action==='clearTrendNames'){
+      sd.trendNames = [];
       render(); return;
     }
 
@@ -1243,6 +1306,55 @@
       settings.homeClan = settings.homeClan===val ? '' : val;
       await saveSettings();
       render();
+      return;
+    }
+    if(action==='moveNameUp' || action==='moveNameDown'){
+      const key = scopeRosterKey(scope);
+      const arr = (settings[key]||[]).slice();
+      const idx = arr.indexOf(val);
+      if(idx<0){ return; }
+      const swapWith = action==='moveNameUp' ? idx-1 : idx+1;
+      if(swapWith<0 || swapWith>=arr.length){ return; }
+      [arr[idx], arr[swapWith]] = [arr[swapWith], arr[idx]];
+      settings[key] = arr;
+      await saveSettings();
+      render();
+      return;
+    }
+    if(action==='toggleVisible'){
+      if(!settings.visibility) settings.visibility = {};
+      let vis = settings.visibility[scope];
+      if(!vis) vis = scopeAllKnown(scope).slice(); // first change: start from "all visible"
+      vis = vis.includes(val) ? vis.filter(n=>n!==val) : [...vis, val];
+      settings.visibility[scope] = vis;
+      await saveSettings();
+      render();
+      return;
+    }
+    if(action==='selectAllVisible'){
+      if(!settings.visibility) settings.visibility = {};
+      settings.visibility[scope] = scopeAllKnown(scope).slice();
+      await saveSettings();
+      render();
+      return;
+    }
+    if(action==='clearAllVisible'){
+      if(!settings.visibility) settings.visibility = {};
+      settings.visibility[scope] = [];
+      await saveSettings();
+      render();
+      return;
+    }
+    if(action==='applyPresetOrder'){
+      const key = scopeRosterKey(scope);
+      const current = settings[key] || [];
+      const ordered = [
+        ...PRESET_CLAN_ORDER.filter(n=>current.includes(n)),
+        ...current.filter(n=>!PRESET_CLAN_ORDER.includes(n))
+      ];
+      settings[key] = ordered;
+      await saveSettings();
+      showToast('並び順を変更しました');
       return;
     }
 
