@@ -156,6 +156,7 @@
   .mi-table th.mi-sortable{cursor:pointer;user-select:none;white-space:nowrap;}
   .mi-table th.mi-sortable:hover{color:var(--gold-soft);}
   .mi-table td{padding:8px 6px;border-bottom:1px solid var(--border-soft);color:var(--text);}
+  .mi-col-fixed{width:64px;min-width:64px;}
   .mi-table tr:hover td{background:rgba(255,255,255,.02);}
   .mi-scroll-x{overflow-x:auto;}
 
@@ -614,10 +615,12 @@
     const el = document.getElementById('mi-capture-area');
     if(!el){ showToast('キャプチャ対象が見つかりません'); return; }
 
-    // Temporarily force any horizontally-scrollable tables (and the capture
-    // root itself) to their full natural width so nothing gets clipped to
-    // whatever happens to be visible on a narrow phone screen.
-    const scrollers = Array.from(el.querySelectorAll('.mi-scroll-x'));
+    // Temporarily force only the *actually overflowing* horizontally-scrollable
+    // tables to their full natural width, so wide tables (e.g. the cross-server
+    // weekday matrix) aren't clipped. Narrow tables that already fit are left
+    // completely untouched so their normal centered/balanced layout is preserved.
+    const scrollers = Array.from(el.querySelectorAll('.mi-scroll-x'))
+      .filter(s => s.scrollWidth > s.clientWidth + 1);
     const prevScrollerStyles = scrollers.map(s=>({el:s, overflow:s.style.overflow, width:s.style.width, maxWidth:s.style.maxWidth}));
     scrollers.forEach(s=>{
       s.style.overflow = 'visible';
@@ -625,9 +628,12 @@
       s.style.maxWidth = 'none';
     });
     const prevElWidth = el.style.width, prevElMaxWidth = el.style.maxWidth;
-    const fullWidth = Math.max(el.scrollWidth, el.offsetWidth, ...scrollers.map(s=>s.scrollWidth), 1);
-    el.style.width = fullWidth + 'px';
-    el.style.maxWidth = 'none';
+    let fullWidth = el.offsetWidth;
+    if(scrollers.length){
+      fullWidth = Math.max(el.scrollWidth, el.offsetWidth, ...scrollers.map(s=>s.scrollWidth), 1);
+      el.style.width = fullWidth + 'px';
+      el.style.maxWidth = 'none';
+    }
 
     let canvas;
     try{
@@ -989,7 +995,7 @@
     const body = rows.length ? rows.map(r=>`
       <tr class="${isHome(r.name)?'mi-home-row':''}">
         <td>${esc(r.name)}${isHome(r.name)?'<span class="mi-home-tag">自クラン</span>':''}</td>
-        ${r.cells.map(c=>`<td style="font-family:'JetBrains Mono',monospace;">${c?esc(c):'ー'}</td>`).join('')}
+        ${r.cells.map(c=>`<td class="mi-col-fixed" style="font-family:'JetBrains Mono',monospace;text-align:right;white-space:nowrap;">${c?esc(c):'ー'}</td>`).join('')}
       </tr>
     `).join('') : `<tr><td colspan="8" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`;
 
@@ -999,7 +1005,7 @@
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各クランがその曜日（ボス）で過去に出した最高スコアを表示します。</div>
         <div class="mi-scroll-x">
         <table class="mi-table">
-          <thead><tr><th>クラン</th>${WEEKDAYS.map(w=>`<th>${w}<br><span style="font-weight:400;">${BOSS_MAP[w]}</span></th>`).join('')}</tr></thead>
+          <thead><tr><th>クラン</th>${WEEKDAYS.map(w=>`<th class="mi-col-fixed" style="text-align:right;">${w}</th>`).join('')}</tr></thead>
           <tbody>${body}</tbody>
         </table>
         </div>
