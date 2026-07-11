@@ -613,8 +613,50 @@
     }
     const el = document.getElementById('mi-capture-area');
     if(!el){ showToast('キャプチャ対象が見つかりません'); return; }
+
+    // Temporarily force any horizontally-scrollable tables (and the capture
+    // root itself) to their full natural width so nothing gets clipped to
+    // whatever happens to be visible on a narrow phone screen.
+    const scrollers = Array.from(el.querySelectorAll('.mi-scroll-x'));
+    const prevScrollerStyles = scrollers.map(s=>({el:s, overflow:s.style.overflow, width:s.style.width, maxWidth:s.style.maxWidth}));
+    scrollers.forEach(s=>{
+      s.style.overflow = 'visible';
+      s.style.width = 'max-content';
+      s.style.maxWidth = 'none';
+    });
+    const prevElWidth = el.style.width, prevElMaxWidth = el.style.maxWidth;
+    const fullWidth = Math.max(el.scrollWidth, el.offsetWidth, ...scrollers.map(s=>s.scrollWidth), 1);
+    el.style.width = fullWidth + 'px';
+    el.style.maxWidth = 'none';
+
+    let canvas;
     try{
-      const canvas = await html2canvas(el, {backgroundColor:'#0a0c12', scale:2, useCORS:true});
+      canvas = await html2canvas(el, {
+        backgroundColor:'#0a0c12',
+        scale:2,
+        useCORS:true,
+        width: fullWidth,
+        windowWidth: fullWidth + 40
+      });
+    }catch(err){
+      console.error(err);
+    } finally {
+      // restore original styles right away, regardless of success — no need
+      // to keep the layout expanded once the canvas has been rendered
+      el.style.width = prevElWidth;
+      el.style.maxWidth = prevElMaxWidth;
+      prevScrollerStyles.forEach(p=>{
+        p.el.style.overflow = p.overflow;
+        p.el.style.width = p.width;
+        p.el.style.maxWidth = p.maxWidth;
+      });
+    }
+    if(!canvas){
+      showToast('画像の生成に失敗しました');
+      return;
+    }
+
+    try{
       await new Promise(resolve=>{
         canvas.toBlob(async (blob)=>{
           if(!blob){ resolve(); return; }
@@ -660,7 +702,7 @@
       ${renderTabs()}
       ${state.tab==='ranking' ? renderRanking() : ''}
       ${state.tab==='graph' ? renderGraph() : ''}
-      ${state.tab==='table' ? renderCaptureButton() + `<div id="mi-capture-area">${renderTable()}</div>` : ''}
+      ${state.tab==='table' ? renderTableControls() + renderCaptureButton() + `<div id="mi-capture-area">${renderTableContent()}</div>` : ''}
       ${state.tab==='admin' ? renderAdmin() : ''}
       <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
       ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
@@ -913,19 +955,19 @@
   }
 
   // ---------- table tab ----------
-  function renderTable(){
-    return state.scope==='internal' ? renderTableInternal() : renderTableCross();
-  }
-
-  function renderTableInternal(){
+  function renderTableControls(){
+    if(state.scope!=='internal') return '';
     const sd = scopedState();
     return `
       <div class="mi-subtabs">
         <div class="mi-subtab ${sd.tableSub==='avgRank'?'active':''}" data-action="tableSub" data-val="avgRank">平均順位</div>
         <div class="mi-subtab ${sd.tableSub==='bestScore'?'active':''}" data-action="tableSub" data-val="bestScore">個人別最高スコア</div>
-      </div>
-      ${sd.tableSub==='avgRank' ? renderAvgRankTable() : renderBestScoreTable()}
-    `;
+      </div>`;
+  }
+  function renderTableContent(){
+    if(state.scope!=='internal') return renderTableCross();
+    const sd = scopedState();
+    return sd.tableSub==='avgRank' ? renderAvgRankTable() : renderBestScoreTable();
   }
 
   function renderTableCross(){
