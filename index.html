@@ -204,6 +204,7 @@
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -599,6 +600,50 @@
     URL.revokeObjectURL(url);
   }
 
+  // ---------- screenshot export (table tab -> PNG) ----------
+  function renderCaptureButton(){
+    return `<div style="margin-bottom:14px;text-align:right;">
+      <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="captureTable">📸 画像として保存</button>
+    </div>`;
+  }
+  async function captureTableAsImage(){
+    if(typeof html2canvas === 'undefined'){
+      showToast('画像化ライブラリの読み込みに失敗しました');
+      return;
+    }
+    const el = document.getElementById('mi-capture-area');
+    if(!el){ showToast('キャプチャ対象が見つかりません'); return; }
+    try{
+      const canvas = await html2canvas(el, {backgroundColor:'#0a0c12', scale:2, useCORS:true});
+      await new Promise(resolve=>{
+        canvas.toBlob(async (blob)=>{
+          if(!blob){ resolve(); return; }
+          const filename = `ranking_table_${todayStr()}.png`;
+          try{
+            const file = new File([blob], filename, {type:'image/png'});
+            if(navigator.canShare && navigator.canShare({files:[file]})){
+              await navigator.share({files:[file], title:filename});
+              resolve();
+              return;
+            }
+          }catch(shareErr){
+            // user cancelled the share sheet, or share failed — fall back to direct download below
+          }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          resolve();
+        }, 'image/png');
+      });
+      showToast('画像を保存しました');
+    }catch(err){
+      console.error(err);
+      showToast('画像の生成に失敗しました');
+    }
+  }
+
   // ---------- render root ----------
   function render(){
     if(!(loadedMembers && loadedClans && loadedSettings)){
@@ -615,7 +660,7 @@
       ${renderTabs()}
       ${state.tab==='ranking' ? renderRanking() : ''}
       ${state.tab==='graph' ? renderGraph() : ''}
-      ${state.tab==='table' ? renderTable() : ''}
+      ${state.tab==='table' ? renderCaptureButton() + `<div id="mi-capture-area">${renderTable()}</div>` : ''}
       ${state.tab==='admin' ? renderAdmin() : ''}
       <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
       ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
@@ -1418,6 +1463,11 @@
       const csv = entriesToCsv(getEntries(scope), scopeLabel(scope), scope);
       const fname = (scope==='internal' ? 'member_entries_' : 'clan_entries_') + todayStr() + '.csv';
       downloadCsv(fname, csv);
+      return;
+    }
+
+    if(action==='captureTable'){
+      await captureTableAsImage();
       return;
     }
 
