@@ -102,6 +102,15 @@
   .mi-rank-row.r1 .mi-rank-num{background:linear-gradient(160deg,#f4d874,var(--gold));color:#2a2205;box-shadow:0 0 12px -2px rgba(212,175,55,.7);}
   .mi-rank-row.r2 .mi-rank-num{background:linear-gradient(160deg,#e4e9ee,var(--silver));color:#232830;}
   .mi-rank-row.r3 .mi-rank-num{background:linear-gradient(160deg,#e3a877,var(--bronze));color:#2b1908;}
+  .mi-table-badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:26px;height:26px;padding:0 6px;border-radius:7px;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12.5px;
+    background:var(--bg-panel3);color:var(--text-dim);
+  }
+  .mi-table-badge.r1{background:linear-gradient(160deg,#f4d874,var(--gold));color:#2a2205;box-shadow:0 0 10px -2px rgba(212,175,55,.7);}
+  .mi-table-badge.r2{background:linear-gradient(160deg,#e4e9ee,var(--silver));color:#232830;}
+  .mi-table-badge.r3{background:linear-gradient(160deg,#e3a877,var(--bronze));color:#2b1908;}
   .mi-rank-clan{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .mi-name-link{cursor:pointer;text-underline-offset:3px;text-decoration:underline dotted rgba(232,207,122,.4);}
   .mi-name-link:active{opacity:.6;}
@@ -239,7 +248,7 @@
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
-  const DEFAULT_SETTINGS = {password:'archero2024', updateTimes:{}, clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
+  const DEFAULT_SETTINGS = {password:'archero2024', clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
   const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
   const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
@@ -283,6 +292,8 @@
   }
 
   const app = document.getElementById('mi-app');
+  let memberUpdatedAt = null;
+  let clanUpdatedAt = null;
 
   // ---------- Firestore storage ----------
   // Real-time listeners keep every open browser in sync automatically.
@@ -296,13 +307,17 @@
 
   function startListeners(){
     onSnapshot(memberEntriesRef, snap=>{
-      memberEntries = normalizeEntries(snap.exists() ? snap.data().list : [], ['member','clan']);
+      const data = snap.exists() ? snap.data() : {};
+      memberEntries = normalizeEntries(data.list, ['member','clan']);
+      memberUpdatedAt = data.updatedAt || null;
       loadedMembers = true;
       render();
     }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
 
     onSnapshot(clanEntriesRef, snap=>{
-      clanEntries = normalizeEntries(snap.exists() ? snap.data().list : [], ['clan']);
+      const data = snap.exists() ? snap.data() : {};
+      clanEntries = normalizeEntries(data.list, ['clan']);
+      clanUpdatedAt = data.updatedAt || null;
       loadedClans = true;
       render();
     }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
@@ -315,11 +330,11 @@
   }
 
   async function saveMemberEntries(){
-    try{ await setDoc(memberEntriesRef, {list: memberEntries}); }
+    try{ await setDoc(memberEntriesRef, {list: memberEntries, updatedAt: todayStr()}); }
     catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
   async function saveClanEntries(){
-    try{ await setDoc(clanEntriesRef, {list: clanEntries}); }
+    try{ await setDoc(clanEntriesRef, {list: clanEntries, updatedAt: todayStr()}); }
     catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
   async function saveSettings(){
@@ -780,7 +795,8 @@
       }
     }
 
-    const timeInfo = date && settings.updateTimes[date] ? `${fmtDateJP(date)} ${settings.updateTimes[date]} 時点` : (date ? `${fmtDateJP(date)} 時点` : '');
+    const updatedAt = scope==='internal' ? memberUpdatedAt : clanUpdatedAt;
+    const timeInfo = date ? `${fmtDateJP(date)} 時点` : '';
     const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（表示中${getVisibleRoster(scope).length}クラン）`;
 
     return `
@@ -789,7 +805,7 @@
       ).join('')}</div>` : ''}
       <div class="mi-panel">
         <div class="mi-panel-title">${panelTitle}</div>
-        ${timeInfo ? `<div class="mi-updated">🕐 ${timeInfo}</div>` : ''}
+        ${timeInfo ? `<div class="mi-updated">🕐 ${timeInfo}${updatedAt ? `　|　${fmtDateJP(updatedAt)} 更新` : ''}</div>` : ''}
         ${date ? `<div class="mi-note" style="margin-top:-6px;margin-bottom:10px;">名前をタップすると日別の順位履歴を見られます</div>` : ''}
         ${rows}
       </div>
@@ -1012,6 +1028,11 @@
       </div>`;
   }
 
+  function rankBadge(rank){
+    const cls = rank===1?'r1':rank===2?'r2':rank===3?'r3':'';
+    return `<span class="mi-table-badge ${cls}">${rank}</span>`;
+  }
+
   function renderAvgRankTable(){
     const scope = 'internal';
     const sd = scopedState();
@@ -1034,7 +1055,7 @@
     rows.sort((a,b)=>a.avg-b.avg);
 
     const body = rows.length ? rows.map((r,i)=>`
-      <tr><td>${i+1}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${r.avg.toFixed(2)}</td></tr>
+      <tr><td>${rankBadge(i+1)}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${r.avg.toFixed(2)}</td></tr>
     `).join('') : `<tr><td colspan="3" style="text-align:center;color:var(--text-faint);padding:20px 0;">対象期間にランクインしたデータがありません</td></tr>`;
 
     return `
@@ -1064,7 +1085,7 @@
     rows.sort((a,b)=>b.best-a.best);
 
     const body = rows.length ? rows.map((r,i)=>`
-      <tr><td>${i+1}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${esc(r.scoreRaw)}</td><td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(r.date)}</td></tr>
+      <tr><td>${rankBadge(i+1)}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${esc(r.scoreRaw)}</td><td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(r.date)}</td></tr>
     `).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">スコアデータがありません</td></tr>`;
 
     return `
@@ -1174,6 +1195,7 @@
       `)}
 
       ${collapsiblePanel('bulkRegister', '✏️ スコア一括登録', `
+        <div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると${scope==='cross'?'T（兆）':'B（10億）'}単位として扱われ、1000を超えたら自動で${scope==='cross'?'E':'T'}表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>
         <div class="mi-field">
           <label class="mi-label">日付</label>
           <input class="mi-input" type="date" id="mi-bulk-date" value="${bulkDate}">
@@ -1184,7 +1206,7 @@
               const rec = entries.find(e=>e.date===bulkDate && e.name===m);
               return `<div class="mi-bulk-row">
                 <div class="mi-bulk-name">${esc(m)}</div>
-                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="1.23T" value="${rec?esc(rec.scoreRaw):''}">
+                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="${scope==='cross'?'631.87':'24.04'}" value="${rec?esc(rec.scoreRaw):''}">
               </div>`;
             }).join('')}
           </div>
@@ -1208,21 +1230,6 @@
       ${collapsiblePanel('csvExport', `📤 CSVエクスポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">現在表示中のスコープ（${lbl.title}）の全データをCSVでダウンロードします。</div>
         <button class="mi-btn" data-action="csvExport">CSVをダウンロード</button>
-      `)}
-
-      ${collapsiblePanel('updateTime', '🕐 更新時刻', `
-        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">各日付の更新時刻を設定します（クラン内・クロスサーバー共通）</div>
-        <div class="mi-row2">
-          <div class="mi-field">
-            <label class="mi-label">日付</label>
-            <input class="mi-input" type="date" id="mi-time-date" value="${todayStr()}">
-          </div>
-          <div class="mi-field">
-            <label class="mi-label">時刻</label>
-            <input class="mi-input" type="time" id="mi-time-time">
-          </div>
-        </div>
-        <button class="mi-btn" data-action="saveTime">保存</button>
       `)}
 
       ${collapsiblePanel('dataManage', '🗂 データ管理', `
@@ -1461,10 +1468,11 @@
         const name = inp.dataset.bulkName;
         const raw = inp.value.trim();
         if(!raw) return;
-        const scoreNum = parseScore(raw);
-        if(isNaN(scoreNum)){ skipped++; return; }
+        const {scoreRaw, scoreNum} = parseImportedScore(raw, scope);
+        if(scoreNum===null){ skipped++; return; }
         const idx = arr.findIndex(e=>e.date===date && e.name===name);
-        const rec = {id: idx>=0 ? arr[idx].id : uid(), date, name, scoreRaw:raw, scoreNum};
+        const prevRank = idx>=0 && arr[idx].rank!=null ? arr[idx].rank : null;
+        const rec = {id: idx>=0 ? arr[idx].id : uid(), date, name, scoreRaw, scoreNum, rank: prevRank};
         if(idx>=0) arr[idx] = rec; else arr.push(rec);
         saved++;
       });
@@ -1516,16 +1524,6 @@
 
     if(action==='captureTable'){
       await captureTableAsImage();
-      return;
-    }
-
-    if(action==='saveTime'){
-      const date = document.getElementById('mi-time-date').value;
-      const time = document.getElementById('mi-time-time').value;
-      if(!date || !time){ showToast('日付と時刻を入力してください'); return; }
-      settings.updateTimes[date] = time;
-      await saveSettings();
-      showToast('保存しました');
       return;
     }
 
