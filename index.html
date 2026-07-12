@@ -20,6 +20,9 @@
     --gold-soft:#e8cf7a;
     --blood:#9b2c2c;
     --blood-bright:#c0392b;
+    --banner-bright:#2f8fd4;
+    --banner-mid:#1f6fae;
+    --banner-dark:#123a5e;
     --cyan:#45c4b0;
     --silver:#b9c2cf;
     --bronze:#c17a4a;
@@ -32,7 +35,7 @@
   *{box-sizing:border-box;}
   #mi-root{
     background:
-      radial-gradient(ellipse 120% 60% at 50% -10%, rgba(155,44,44,0.16), transparent 60%),
+      radial-gradient(ellipse 120% 60% at 50% -10%, rgba(47,143,212,0.16), transparent 60%),
       var(--bg);
     color:var(--text);
     font-family:'Noto Sans JP', sans-serif;
@@ -50,9 +53,9 @@
   .mi-banner{position:relative;display:inline-block;padding:10px 38px;margin-top:2px;}
   .mi-banner::before{
     content:"";position:absolute;inset:0;
-    background:linear-gradient(180deg, var(--blood-bright), var(--blood) 70%, #5e1919);
+    background:linear-gradient(180deg, var(--banner-bright), var(--banner-mid) 70%, var(--banner-dark));
     clip-path:polygon(3% 0%, 97% 0%, 100% 30%, 96% 50%, 100% 70%, 97% 100%, 3% 100%, 0% 68%, 4% 50%, 0% 32%);
-    box-shadow:0 8px 24px -8px rgba(155,44,44,.6);
+    box-shadow:0 8px 24px -8px rgba(47,143,212,.6);
   }
   .mi-title{
     position:relative;font-family:'Shippori Mincho',serif;font-weight:800;
@@ -248,7 +251,7 @@
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
-  const DEFAULT_SETTINGS = {password:'archero2024', clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
+  const DEFAULT_SETTINGS = {password:'neko222', clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
   const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
   const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
@@ -264,7 +267,7 @@
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
-    csvImport:false, csvExport:false, updateTime:false, dataManage:false
+    csvImport:false, csvExport:false, dataManage:false
   };
 
   let state = {
@@ -512,6 +515,38 @@
   function getRankForNameOnDate(scope, date, name){
     const rec = getRankedListForDate(scope, date).find(e=>e.name===name);
     return rec ? rec.displayRank : null;
+  }
+
+  // Builds {name -> [recent ranks]} from the most recent N recorded dates,
+  // used to sort the rank-selection dropdowns so the most likely person for
+  // a given rank slot appears near the top instead of buried in roster order.
+  function buildRecentRankHistory(scope, lookbackDays){
+    const entries = getEntries(scope);
+    const recentDates = [...new Set(entries.map(e=>e.date))].sort().slice(-lookbackDays);
+    const map = {};
+    recentDates.forEach(d=>{
+      entries.forEach(e=>{
+        if(e.date===d && e.rank!=null){
+          (map[e.name] = map[e.name] || []).push(e.rank);
+        }
+      });
+    });
+    return map;
+  }
+  // Sorts roster names by how close their recent average rank is to `rank`
+  // (closest first). Names with no recent rank history sort to the bottom,
+  // in their original roster order.
+  function orderRosterForRank(rank, roster, historyMap){
+    return roster
+      .map((name, i)=>{
+        const ranks = historyMap[name];
+        const score = ranks && ranks.length
+          ? Math.abs((ranks.reduce((a,b)=>a+b,0)/ranks.length) - rank)
+          : Infinity;
+        return {name, score, i};
+      })
+      .sort((a,b)=> a.score!==b.score ? a.score-b.score : a.i-b.i)
+      .map(r=>r.name);
   }
 
   // ---------- CSV import / export ----------
@@ -1158,6 +1193,13 @@
             <button class="mi-btn" data-action="saveClanName">保存</button>
           </div>
         </div>
+        <div class="mi-field">
+          <label class="mi-label">管理者パスワードの変更</label>
+          <div class="mi-row2">
+            <input class="mi-input" id="mi-new-password" type="text" placeholder="新しいパスワード">
+            <button class="mi-btn" data-action="savePassword">変更</button>
+          </div>
+        </div>
       `)}
 
       ${collapsiblePanel('roster', `👥 ${lbl.panel}`, `
@@ -1194,24 +1236,41 @@
         }).join('') : `<div class="mi-empty" style="padding:14px 0;">${lbl.title}が登録されていません</div>`}
       `)}
 
-      ${collapsiblePanel('bulkRegister', '✏️ スコア一括登録', `
-        <div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると${scope==='cross'?'T（兆）':'B（10億）'}単位として扱われ、1000を超えたら自動で${scope==='cross'?'E':'T'}表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>
+      ${collapsiblePanel('bulkRegister', scope==='internal' ? '✏️ 順位で一括登録' : '✏️ スコア一括登録', `
+        ${scope==='cross' ? `<div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると T（兆）単位として扱われ、1000を超えたら自動でE表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>` : `<div class="mi-note" style="margin-top:0;">各順位に誰が入ったかを選ぶだけでOKです。スコアが分かる時だけ右側に入力してください（空欄でも登録できます）。</div>`}
         <div class="mi-field">
           <label class="mi-label">日付</label>
           <input class="mi-input" type="date" id="mi-bulk-date" value="${bulkDate}">
         </div>
-        ${roster.length ? `
+        ${roster.length ? (scope==='internal' ? `
+          <div>
+            ${(()=>{ const historyMap = buildRecentRankHistory(scope, 10); return Array.from({length:15}, (_,i)=>i+1).map(rank=>{
+              const rec = entries.find(e=>e.date===bulkDate && e.rank===rank);
+              const selectedName = rec ? rec.name : '';
+              const orderedRoster = orderRosterForRank(rank, roster, historyMap);
+              return `<div class="mi-bulk-row" style="grid-template-columns:40px 1fr 90px;gap:6px;">
+                <div class="mi-bulk-name" style="text-align:center;">${rank}位</div>
+                <select class="mi-select" data-rank-select="${rank}">
+                  <option value="">未選択</option>
+                  ${orderedRoster.map(m=>`<option value="${esc(m)}" ${m===selectedName?'selected':''}>${esc(m)}</option>`).join('')}
+                </select>
+                <input class="mi-input" data-rank-score="${rank}" placeholder="任意" value="${rec&&rec.scoreRaw?esc(rec.scoreRaw):''}">
+              </div>`;
+            }).join(''); })()}
+          </div>
+          <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegisterRanked">まとめて登録</button></div>
+        ` : `
           <div>
             ${roster.map((m)=>{
               const rec = entries.find(e=>e.date===bulkDate && e.name===m);
               return `<div class="mi-bulk-row">
                 <div class="mi-bulk-name">${esc(m)}</div>
-                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="${scope==='cross'?'631.87':'24.04'}" value="${rec?esc(rec.scoreRaw):''}">
+                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="631.87" value="${rec?esc(rec.scoreRaw):''}">
               </div>`;
             }).join('')}
           </div>
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegister">まとめて登録</button></div>
-        ` : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`}
+        `) : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`}
       `)}
 
       ${collapsiblePanel('csvImport', `📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
@@ -1379,6 +1438,16 @@
       showToast('保存しました');
       return;
     }
+    if(action==='savePassword'){
+      const input = document.getElementById('mi-new-password');
+      const newPw = input.value.trim();
+      if(!newPw){ showToast('新しいパスワードを入力してください'); return; }
+      settings.password = newPw;
+      await saveSettings();
+      input.value = '';
+      showToast('パスワードを変更しました');
+      return;
+    }
 
     if(action==='addName'){
       const input = document.getElementById('mi-new-name');
@@ -1479,6 +1548,44 @@
       setEntries(scope, arr);
       await persistEntries(scope);
       showToast(skipped ? `${saved}件登録（${skipped}件は形式エラーでスキップ）` : `${saved}件登録しました`);
+      return;
+    }
+
+    if(action==='bulkRegisterRanked'){
+      const date = document.getElementById('mi-bulk-date').value;
+      if(!date){ showToast('日付を選択してください'); return; }
+      let arr = getEntries(scope);
+      const seen = new Set();
+      let saved = 0, skippedDup = 0;
+      for(let rank=1; rank<=15; rank++){
+        const sel = document.querySelector(`[data-rank-select="${rank}"]`);
+        const scoreInp = document.querySelector(`[data-rank-score="${rank}"]`);
+        const name = sel ? sel.value : '';
+        if(!name) continue;
+        if(seen.has(name)){ skippedDup++; continue; }
+        seen.add(name);
+        const rawScore = scoreInp ? scoreInp.value.trim() : '';
+        let scoreRaw = '', scoreNum = null;
+        if(rawScore){
+          const parsed = parseImportedScore(rawScore, scope);
+          scoreRaw = parsed.scoreRaw; scoreNum = parsed.scoreNum;
+        }
+        const idx = arr.findIndex(e=>e.date===date && e.name===name);
+        if(idx>=0){
+          const prev = arr[idx];
+          arr[idx] = {
+            id: prev.id, date, name, rank,
+            scoreRaw: scoreRaw!=='' ? scoreRaw : prev.scoreRaw,
+            scoreNum: scoreNum!==null ? scoreNum : prev.scoreNum
+          };
+        } else {
+          arr.push({id: uid(), date, name, rank, scoreRaw, scoreNum});
+        }
+        saved++;
+      }
+      setEntries(scope, arr);
+      await persistEntries(scope);
+      showToast(skippedDup ? `${saved}件登録（同じ人が複数の順位に選ばれていたため${skippedDup}件スキップ）` : `${saved}件登録しました`);
       return;
     }
 
