@@ -263,7 +263,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:'all', manageDateFilter:'all', manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -486,6 +486,22 @@
         </div>
       </div>
       ${calendar}`;
+  }
+  // Single-date picker (one tappable button + inline calendar), for fields
+  // like "which date is this bulk entry for" that only need one date rather
+  // than a start/end range. Uses the same calOpenField namespacing scheme
+  // ("<target>:single") and writes straight to sd[target].
+  function renderSingleDatePicker(sd, value, target){
+    const isOpen = sd.calOpenField === `${target}:single`;
+    const label = value ? fmtDateJP(value) : '選択してください';
+    let calendar2 = '';
+    if(isOpen){
+      const viewMonth = sd.calViewMonth || monthOf(value);
+      calendar2 = buildCalendarGrid(viewMonth, value);
+    }
+    return `
+      <div class="mi-date-btn ${isOpen?'active':''}" data-action="openCal" data-val="${target}:single">${label}</div>
+      ${calendar2}`;
   }
   function uid(){ return Math.random().toString(36).slice(2,10); }
   function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1159,9 +1175,11 @@
     const entries = getEntries(scope);
 
     const allDatesForScope = [...new Set(entries.map(e=>e.date))].sort();
+    const manageRangeStart = sd.manageDateRangeStart || (allDatesForScope[0]||'');
+    const manageRangeEnd = sd.manageDateRangeEnd || (allDatesForScope[allDatesForScope.length-1]||'');
     const manageEntries = entries
-      .filter(e=> sd.manageFilter==='all' || e.name===sd.manageFilter)
-      .filter(e=> sd.manageDateFilter==='all' || e.date===sd.manageDateFilter)
+      .filter(e=> sd.manageFilter.length===0 || sd.manageFilter.includes(e.name))
+      .filter(e=> !allDatesForScope.length || (e.date>=manageRangeStart && e.date<=manageRangeEnd))
       .sort((a,b)=>{
         const dir = sd.manageSortDir==='asc' ? 1 : -1;
         let av,bv;
@@ -1237,10 +1255,10 @@
       `)}
 
       ${collapsiblePanel('bulkRegister', scope==='internal' ? '✏️ 順位で一括登録' : '✏️ スコア一括登録', `
-        ${scope==='cross' ? `<div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると T（兆）単位として扱われ、1000を超えたら自動でE表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>` : `<div class="mi-note" style="margin-top:0;">各順位に誰が入ったかを選ぶだけでOKです。スコアが分かる時だけ右側に入力してください（空欄でも登録できます）。</div>`}
+        ${scope==='cross' ? `<div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると T（兆）単位として扱われ、1000を超えたら自動でE表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>` : `<div class="mi-note" style="margin-top:0;">各順位に誰が入ったかを選ぶだけでOKです。スコアが分かる時だけ右側に入力してください（空欄でも登録できます）。単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると B（10億）単位として扱われ、1000を超えたら自動でT表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>`}
         <div class="mi-field">
           <label class="mi-label">日付</label>
-          <input class="mi-input" type="date" id="mi-bulk-date" value="${bulkDate}">
+          ${renderSingleDatePicker(sd, bulkDate, 'bulkDate')}
         </div>
         ${roster.length ? (scope==='internal' ? `
           <div>
@@ -1292,18 +1310,13 @@
       `)}
 
       ${collapsiblePanel('dataManage', '🗂 データ管理', `
-        <div class="mi-label">${lbl.title}で絞り込み</div>
+        <div class="mi-label">${lbl.title}で絞り込み（複数選択可）</div>
         <div class="mi-pillrow">
-          <div class="mi-pill ${sd.manageFilter==='all'?'active':''}" data-action="manageFilter" data-val="all">全${lbl.title}</div>
-          ${scopeAllKnown(scope).map(m=>`<div class="mi-pill ${sd.manageFilter===m?'active':''}" data-action="manageFilter" data-val="${esc(m)}">${esc(m)}</div>`).join('')}
+          <div class="mi-pill ${sd.manageFilter.length===0?'active':''}" data-action="manageFilterAll">全${lbl.title}</div>
+          ${scopeAllKnown(scope).map(m=>`<div class="mi-pill ${sd.manageFilter.includes(m)?'active':''}" data-action="manageFilter" data-val="${esc(m)}">${esc(m)}</div>`).join('')}
         </div>
-        <div class="mi-field" style="max-width:220px;">
-          <label class="mi-label">日付で絞り込み</label>
-          <select class="mi-select" id="mi-manage-date-filter">
-            <option value="all" ${sd.manageDateFilter==='all'?'selected':''}>すべての日付</option>
-            ${allDatesForScope.map(d=>`<option value="${d}" ${sd.manageDateFilter===d?'selected':''}>${fmtDateJP(d)}</option>`).join('')}
-          </select>
-        </div>
+        <div class="mi-label" style="margin-top:14px;">期間で絞り込み</div>
+        ${renderDateRangePicker(sd, manageRangeStart, manageRangeEnd, 'manageDate')}
         <div class="mi-scroll-x">
         <table class="mi-table">
           <thead><tr>
@@ -1348,7 +1361,11 @@
     if(action==='graphMode'){ sd.graphMode = val; render(); return; }
     if(action==='graphMetric'){ sd.graphMetric = val; render(); return; }
     if(action==='graphBoss'){ sd.graphBoss = val; render(); return; }
-    if(action==='manageFilter'){ sd.manageFilter = val; render(); return; }
+    if(action==='manageFilter'){
+      sd.manageFilter = sd.manageFilter.includes(val) ? sd.manageFilter.filter(n=>n!==val) : [...sd.manageFilter, val];
+      render(); return;
+    }
+    if(action==='manageFilterAll'){ sd.manageFilter = []; render(); return; }
     if(action==='tableSub'){ sd.tableSub = val; render(); return; }
 
     if(action==='noop'){ return; }
@@ -1356,13 +1373,13 @@
     if(action==='closeModal'){ state.modal = null; render(); return; }
 
     if(action==='openCal'){
-      // val is like "table:start" or "graph:end"
+      // val is like "table:start" / "graph:end" / "bulkDate:single"
       if(sd.calOpenField===val){
         sd.calOpenField = null;
       } else {
         sd.calOpenField = val;
         const [target, field] = val.split(':');
-        const current = sd[`${target}Range${field==='start'?'Start':'End'}`];
+        const current = field==='single' ? sd[target] : sd[`${target}Range${field==='start'?'Start':'End'}`];
         sd.calViewMonth = monthOf(current);
       }
       render(); return;
@@ -1378,13 +1395,17 @@
     if(action==='pickCalDate'){
       if(sd.calOpenField){
         const [target, field] = sd.calOpenField.split(':');
-        const startKey = `${target}RangeStart`, endKey = `${target}RangeEnd`;
-        if(field==='start'){
-          sd[startKey] = val;
-          if(sd[endKey] && val>sd[endKey]) sd[endKey] = val;
+        if(field==='single'){
+          sd[target] = val;
         } else {
-          sd[endKey] = val;
-          if(sd[startKey] && val<sd[startKey]) sd[startKey] = val;
+          const startKey = `${target}RangeStart`, endKey = `${target}RangeEnd`;
+          if(field==='start'){
+            sd[startKey] = val;
+            if(sd[endKey] && val>sd[endKey]) sd[endKey] = val;
+          } else {
+            sd[endKey] = val;
+            if(sd[startKey] && val<sd[startKey]) sd[startKey] = val;
+          }
         }
       }
       sd.calOpenField = null;
@@ -1528,7 +1549,7 @@
     }
 
     if(action==='bulkRegister'){
-      const date = document.getElementById('mi-bulk-date').value;
+      const date = sd.bulkDate || todayStr();
       if(!date){ showToast('日付を選択してください'); return; }
       const inputs = document.querySelectorAll('[data-bulk-name]');
       let arr = getEntries(scope);
@@ -1552,7 +1573,7 @@
     }
 
     if(action==='bulkRegisterRanked'){
-      const date = document.getElementById('mi-bulk-date').value;
+      const date = sd.bulkDate || todayStr();
       if(!date){ showToast('日付を選択してください'); return; }
       let arr = getEntries(scope);
       const seen = new Set();
@@ -1642,24 +1663,22 @@
     }
     if(action==='deleteAll'){
       if(confirm('表示中のデータをすべて削除します。よろしいですか？')){
-        const target = sd.manageFilter;
-        const filtered = target==='all' ? [] : getEntries(scope).filter(e=>e.name!==target);
+        const allEntries = getEntries(scope);
+        const allDates = [...new Set(allEntries.map(e=>e.date))].sort();
+        const rangeStart = sd.manageDateRangeStart || (allDates[0]||'');
+        const rangeEnd = sd.manageDateRangeEnd || (allDates[allDates.length-1]||'');
+        const toDeleteIds = new Set(
+          allEntries
+            .filter(e=> sd.manageFilter.length===0 || sd.manageFilter.includes(e.name))
+            .filter(e=> !allDates.length || (e.date>=rangeStart && e.date<=rangeEnd))
+            .map(e=>e.id)
+        );
+        const filtered = allEntries.filter(e=>!toDeleteIds.has(e.id));
         setEntries(scope, filtered);
         await persistEntries(scope);
         render();
       }
       return;
-    }
-  });
-
-  app.addEventListener('change', (ev)=>{
-    if(ev.target.id==='mi-bulk-date'){
-      scopedState().bulkDate = ev.target.value;
-      render();
-    }
-    if(ev.target.id==='mi-manage-date-filter'){
-      scopedState().manageDateFilter = ev.target.value;
-      render();
     }
   });
 
