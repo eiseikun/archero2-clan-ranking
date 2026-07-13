@@ -869,9 +869,10 @@
     const dates = [...new Set(getEntries(scope).filter(e=>e.name===name).map(e=>e.date))].sort().reverse();
     const rows = dates.map(d=>{
       const rec = getRankedListForDate(scope, d).find(e=>e.name===name);
+      const rankCell = rec && rec.displayRank!=null ? rankBadge(rec.displayRank) : 'ー';
       return `<tr>
         <td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</td>
-        <td>${rec && rec.displayRank!=null ? rec.displayRank+'位' : 'ー'}</td>
+        <td>${rankCell}</td>
         <td style="font-family:'JetBrains Mono',monospace;">${rec && rec.scoreRaw ? esc(rec.scoreRaw) : 'ー'}</td>
       </tr>`;
     }).join('');
