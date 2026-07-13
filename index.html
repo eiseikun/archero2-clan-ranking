@@ -71,6 +71,12 @@
     background:var(--bg-panel);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;letter-spacing:.02em;
   }
   .mi-scope-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(69,196,176,.12);box-shadow:inset 0 0 0 1px rgba(69,196,176,.25);}
+  .mi-admin-btn{
+    display:inline-flex;align-items:center;gap:4px;padding:7px 13px;border-radius:999px;
+    font-size:12px;font-weight:700;background:var(--bg-panel);border:1px solid var(--border);
+    color:var(--text-dim);cursor:pointer;letter-spacing:.02em;
+  }
+  .mi-admin-btn.active{border-color:var(--gold);color:var(--gold-soft);background:rgba(212,175,55,.12);}
 
   .mi-tabs{display:flex;gap:6px;margin:0 0 16px;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:5px;}
   .mi-tab{
@@ -263,7 +269,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), registerMode:'manual', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -612,6 +618,30 @@
     const n = parseInt(s,10);
     return isNaN(n) ? null : n;
   }
+  // Parses AI-transcribed screenshot text pasted as a flat, comma-separated
+  // sequence of (rank, name, score) triplets, e.g.
+  //   "1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T"
+  // Tolerates line breaks in place of commas. If a triplet doesn't look
+  // right (rank isn't a plain integer, or the score field doesn't start
+  // with a digit), it resyncs by advancing one token at a time rather than
+  // corrupting every entry after it.
+  function parseFlatTriplets(text){
+    const tokens = String(text||'').replace(/[\r\n]+/g, ',').split(',').map(s=>s.trim()).filter(Boolean);
+    const rows = [];
+    let i = 0;
+    while(i < tokens.length){
+      const rankTok = tokens[i], nameTok = tokens[i+1], scoreTok = tokens[i+2];
+      const looksLikeRank = /^[0-9]+$/.test(rankTok||'');
+      const looksLikeScore = !!(scoreTok && /^[0-9]/.test(scoreTok));
+      if(looksLikeRank && nameTok && looksLikeScore){
+        rows.push({rank: parseInt(rankTok,10), name: nameTok, scoreRaw: scoreTok});
+        i += 3;
+      } else {
+        i += 1;
+      }
+    }
+    return rows;
+  }
   function readFileAsText(file){
     return new Promise((resolve,reject)=>{
       const reader = new FileReader();
@@ -770,6 +800,7 @@
 
     app.innerHTML = `
       ${renderHeader()}
+      ${renderAdminButtonRow()}
       ${renderScopeSwitch()}
       ${renderTabs()}
       ${state.tab==='ranking' ? renderRanking() : ''}
@@ -797,6 +828,12 @@
       </div>`;
   }
 
+  function renderAdminButtonRow(){
+    return `<div style="display:flex;justify-content:flex-end;margin-top:6px;">
+      <div class="mi-admin-btn ${state.tab==='admin'?'active':''}" data-action="tab" data-val="admin">⚙ 管理者</div>
+    </div>`;
+  }
+
   function renderScopeSwitch(){
     return `<div class="mi-scopeswitch">
       <div class="mi-scope-btn ${state.scope==='internal'?'active':''}" data-action="setScope" data-val="internal">🛡 クラン内</div>
@@ -805,7 +842,7 @@
   }
 
   function renderTabs(){
-    const tabs = [['ranking','🏆 ランキング'],['graph','📈 グラフ'],['table','📋 表'],['admin','⚙ 管理者']];
+    const tabs = [['ranking','🏆 ランキング'],['graph','📈 グラフ'],['table','📋 表']];
     return `<div class="mi-tabs">${tabs.map(([k,label])=>
       `<div class="mi-tab ${state.tab===k?'active':''}" data-action="tab" data-val="${k}">${label}</div>`
     ).join('')}</div>`;
@@ -1261,7 +1298,26 @@
         }).join('') : `<div class="mi-empty" style="padding:14px 0;">${lbl.title}が登録されていません</div>`}
       `)}
 
-      ${collapsiblePanel('bulkRegister', scope==='internal' ? '✏️ 順位で一括登録' : '✏️ スコア一括登録', `
+      ${collapsiblePanel('bulkRegister', scope==='internal' ? '✏️ 順位で登録' : '✏️ スコアで登録', `
+        <div class="mi-subtabs">
+          <div class="mi-subtab ${sd.registerMode==='manual'?'active':''}" data-action="registerMode" data-val="manual">手入力</div>
+          <div class="mi-subtab ${sd.registerMode==='paste'?'active':''}" data-action="registerMode" data-val="paste">一括登録（貼り付け）</div>
+        </div>
+
+        ${sd.registerMode==='paste' ? `
+          <div class="mi-note" style="margin-top:0;">
+            スクショをAIに読み取ってもらい、「順位,名前,スコア」をカンマ区切りで繰り返す形式（例: <code>1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T</code>）で出力してもらってください。改行区切りでも構いません（カンマと同じ扱いにします）。それをそのまま下に貼り付けて登録できます。
+          </div>
+          <div class="mi-field">
+            <label class="mi-label">日付</label>
+            ${renderSingleDatePicker(sd, sd.pasteDate||todayStr(), 'pasteDate')}
+          </div>
+          <div class="mi-field">
+            <label class="mi-label">貼り付け</label>
+            <textarea class="mi-input" id="mi-paste-text" rows="6" style="resize:vertical;font-family:'JetBrains Mono',monospace;" placeholder="1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T..."></textarea>
+          </div>
+          <button class="mi-btn mi-btn-gold" data-action="pasteRegister">この内容で登録</button>
+        ` : `
         ${scope==='cross' ? `<div class="mi-note" style="margin-top:0;">単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると T（兆）単位として扱われ、1000を超えたら自動でE表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>` : `<div class="mi-note" style="margin-top:0;">各順位に誰が入ったかを選ぶだけでOKです。スコアが分かる時だけ右側に入力してください（空欄でも登録できます）。単位（K/M/B/T/E）は書かなくてもOKです。数字だけ入力すると B（10億）単位として扱われ、1000を超えたら自動でT表記になります。単位付きで入力した場合もこの表記に自動で揃えます。</div>`}
         <div class="mi-field">
           <label class="mi-label">日付</label>
@@ -1296,6 +1352,7 @@
           </div>
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegister">まとめて登録</button></div>
         `) : (roster.length ? `<div class="mi-empty" style="padding:14px 0;">表示中の${lbl.title}がありません（「${lbl.panel}」でチェックを入れると表示されます）</div>` : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`)}
+        `}
       `)}
 
       ${collapsiblePanel('csvImport', `📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
@@ -1374,6 +1431,7 @@
     }
     if(action==='manageFilterAll'){ sd.manageFilter = []; render(); return; }
     if(action==='tableSub'){ sd.tableSub = val; render(); return; }
+    if(action==='registerMode'){ sd.registerMode = val; render(); return; }
 
     if(action==='noop'){ return; }
     if(action==='showHistory'){ state.modal = {scope, name: val}; render(); return; }
@@ -1660,6 +1718,43 @@
       setEntries(scope, arr);
       await persistEntries(scope);
       showToast(skippedDup ? `${saved}件登録（同じ人が複数の順位に選ばれていたため${skippedDup}件スキップ）` : `${saved}件登録しました`);
+      return;
+    }
+
+    if(action==='pasteRegister'){
+      const date = sd.pasteDate || todayStr();
+      const textEl = document.getElementById('mi-paste-text');
+      const text = textEl ? textEl.value : '';
+      const rows = parseFlatTriplets(text);
+      if(!rows.length){ showToast('貼り付けた内容から読み取れませんでした（形式をご確認ください）'); return; }
+
+      let arr = getEntries(scope);
+      const newNames = new Set();
+      let saved = 0;
+      rows.forEach(row=>{
+        const name = row.name.trim();
+        if(!name) return;
+        const {scoreRaw, scoreNum} = parseImportedScore(row.scoreRaw, scope);
+        const idx = arr.findIndex(e=>e.date===date && e.name===name);
+        if(idx>=0){
+          arr[idx] = {id: arr[idx].id, date, name, rank: row.rank, scoreRaw, scoreNum};
+        } else {
+          arr.push({id: uid(), date, name, rank: row.rank, scoreRaw, scoreNum});
+        }
+        newNames.add(name);
+        saved++;
+      });
+      setEntries(scope, arr);
+      await persistEntries(scope);
+
+      const key = scopeRosterKey(scope);
+      if(!settings[key]) settings[key] = [];
+      let rosterAdded = 0;
+      newNames.forEach(n=>{ if(!settings[key].includes(n)){ settings[key].push(n); rosterAdded++; } });
+      if(rosterAdded) await saveSettings();
+
+      if(textEl) textEl.value = '';
+      showToast(`${saved}件登録しました${rosterAdded ? `（新規${scopeLabel(scope).title}${rosterAdded}件を追加）` : ''}`);
       return;
     }
 
