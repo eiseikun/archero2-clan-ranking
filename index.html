@@ -251,7 +251,7 @@
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
-  const DEFAULT_SETTINGS = {password:'neko222', clanName:'', members:[], clans:[], homeClan:'', visibility:{}};
+  const DEFAULT_SETTINGS = {password:'neko222', clanName:'', members:[], clans:[], homeClan:'', visibility:{}, nameHistory:{internal:{}, cross:{}}};
   const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
   const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
@@ -875,12 +875,16 @@
         <td style="font-family:'JetBrains Mono',monospace;">${rec && rec.scoreRaw ? esc(rec.scoreRaw) : 'ー'}</td>
       </tr>`;
     }).join('');
+    const formerNames = (settings.nameHistory && settings.nameHistory[scope] && settings.nameHistory[scope][name]) || [];
 
     return `
       <div class="mi-modal-backdrop" data-action="closeModal">
         <div class="mi-modal" data-action="noop">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <div class="mi-panel-title" style="margin:0;">${esc(name)} の履歴</div>
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:14px;">
+            <div>
+              <div class="mi-panel-title" style="margin:0;">${esc(name)} の履歴</div>
+              ${formerNames.length ? `<div style="font-size:11px;color:var(--text-faint);margin-top:4px;">旧：${formerNames.map(n=>esc(n)).join('、')}</div>` : ''}
+            </div>
             <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="closeModal">閉じる</button>
           </div>
           <div class="mi-scroll-x">
@@ -1171,6 +1175,7 @@
     const sd = scopedState();
     const lbl = scopeLabel(scope);
     const roster = scopeRoster(scope);
+    const visibleRoster = getVisibleRoster(scope);
     const bulkDate = sd.bulkDate || todayStr();
     const entries = getEntries(scope);
 
@@ -1247,6 +1252,7 @@
             <div class="mi-roster-actions">
               <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="moveNameUp" data-val="${esc(m)}" ${i===0?'disabled':''}>↑</button>
               <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="moveNameDown" data-val="${esc(m)}" ${i===roster.length-1?'disabled':''}>↓</button>
+              <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="renameName" data-val="${esc(m)}">改名</button>
               ${scope==='cross' ? `<button class="mi-btn ${isHome?'mi-btn-cyan':'mi-btn-ghost'} mi-btn-sm" data-action="setHomeClan" data-val="${esc(m)}">${isHome?'★自クラン':'☆自クランに設定'}</button>` : ''}
               <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="removeName" data-val="${esc(m)}">削除</button>
             </div>
@@ -1260,12 +1266,12 @@
           <label class="mi-label">日付</label>
           ${renderSingleDatePicker(sd, bulkDate, 'bulkDate')}
         </div>
-        ${roster.length ? (scope==='internal' ? `
+        ${visibleRoster.length ? (scope==='internal' ? `
           <div>
             ${(()=>{ const historyMap = buildRecentRankHistory(scope, 10); return Array.from({length:15}, (_,i)=>i+1).map(rank=>{
               const rec = entries.find(e=>e.date===bulkDate && e.rank===rank);
               const selectedName = rec ? rec.name : '';
-              const orderedRoster = orderRosterForRank(rank, roster, historyMap);
+              const orderedRoster = orderRosterForRank(rank, visibleRoster, historyMap);
               return `<div class="mi-bulk-row" style="grid-template-columns:40px 1fr 90px;gap:6px;">
                 <div class="mi-bulk-name" style="text-align:center;">${rank}位</div>
                 <select class="mi-select" data-rank-select="${rank}">
@@ -1279,7 +1285,7 @@
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegisterRanked">まとめて登録</button></div>
         ` : `
           <div>
-            ${roster.map((m)=>{
+            ${visibleRoster.map((m)=>{
               const rec = entries.find(e=>e.date===bulkDate && e.name===m);
               return `<div class="mi-bulk-row">
                 <div class="mi-bulk-name">${esc(m)}</div>
@@ -1288,7 +1294,7 @@
             }).join('')}
           </div>
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegister">まとめて登録</button></div>
-        `) : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`}
+        `) : (roster.length ? `<div class="mi-empty" style="padding:14px 0;">表示中の${lbl.title}がありません（「${lbl.panel}」でチェックを入れると表示されます）</div>` : `<div class="mi-empty" style="padding:14px 0;">先に「${lbl.panel}」で${lbl.title}を追加してください</div>`)}
       `)}
 
       ${collapsiblePanel('csvImport', `📥 CSVインポート（${lbl.title==='クラン'?'クロスサーバー':'クラン内'}）`, `
@@ -1490,6 +1496,52 @@
         await saveSettings();
         render();
       }
+      return;
+    }
+    if(action==='renameName'){
+      const oldName = val;
+      const input = prompt(`「${oldName}」の新しい名前を入力してください`, oldName);
+      const newName = (input || '').trim();
+      if(!newName || newName===oldName){ return; }
+      const key = scopeRosterKey(scope);
+      const roster = settings[key] || [];
+      if(roster.includes(newName)){
+        showToast('その名前は既に登録されています');
+        return;
+      }
+      // update roster (keep position)
+      settings[key] = roster.map(n => n===oldName ? newName : n);
+
+      // merge historical entries under the new name (same date+name pairs get merged)
+      let arr = getEntries(scope).map(e => e.name===oldName ? {...e, name:newName} : e);
+      const merged = [];
+      const posByKey = {};
+      arr.forEach(e=>{
+        const k = e.date+'|'+e.name;
+        if(k in posByKey){
+          const m = merged[posByKey[k]];
+          if((!m.scoreRaw) && e.scoreRaw) { m.scoreRaw = e.scoreRaw; m.scoreNum = e.scoreNum; }
+          if(m.rank==null && e.rank!=null) m.rank = e.rank;
+        } else {
+          posByKey[k] = merged.length;
+          merged.push({...e});
+        }
+      });
+      setEntries(scope, merged);
+      await persistEntries(scope);
+
+      if(scope==='cross' && settings.homeClan===oldName) settings.homeClan = newName;
+      if(settings.visibility && settings.visibility[scope]){
+        settings.visibility[scope] = settings.visibility[scope].map(n=>n===oldName?newName:n);
+      }
+      if(!settings.nameHistory) settings.nameHistory = {internal:{}, cross:{}};
+      if(!settings.nameHistory[scope]) settings.nameHistory[scope] = {};
+      const priorHistory = settings.nameHistory[scope][oldName] || [];
+      settings.nameHistory[scope][newName] = [...priorHistory, oldName];
+      if(settings.nameHistory[scope][oldName]) delete settings.nameHistory[scope][oldName];
+      await saveSettings();
+
+      showToast(`「${oldName}」を「${newName}」に変更しました`);
       return;
     }
     if(action==='setHomeClan'){
