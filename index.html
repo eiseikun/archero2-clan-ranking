@@ -405,11 +405,11 @@
   }
   // Scope-specific CSV number convention:
   //  - cross (clan vs clan): bare number = T, e.g. "631.87" -> "631.87T". If >=1000T, switch to E ("1.5E" = 1500T).
-  //  - internal (clan members): bare number = B (no suffix), e.g. "24.04" stays "24.04". If >=1000B, switch to T ("8.67T" = 8670B).
+  //  - internal (clan members): bare number = B, e.g. "24.04" -> "24.04B". If >=1000B, switch to T ("8.67T" = 8670B).
   function scopeUnitConfig(scope){
     return scope==='cross'
       ? {mult:1e12, unit:'T', upMult:1e15, upUnit:'E', showBaseSuffix:true}
-      : {mult:1e9,  unit:'B', upMult:1e12, upUnit:'T', showBaseSuffix:false};
+      : {mult:1e9,  unit:'B', upMult:1e12, upUnit:'T', showBaseSuffix:true};
   }
   function formatScoreForScope(scoreNum, scope){
     if(scoreNum==null || isNaN(scoreNum)) return '';
@@ -866,10 +866,11 @@
         if(!isNameVisible(scope, e.name)) return '';
         const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
         const isHome = scope==='cross' && settings.homeClan && e.name===settings.homeClan;
+        const scoreDisplay = formatScoreForScope(e.scoreNum, scope);
         return `<div class="mi-rank-row ${rankClass} ${isHome?'home':''}">
           <div class="mi-rank-num">${e.displayRank}</div>
           <div class="mi-rank-clan mi-name-link" data-action="showHistory" data-val="${esc(e.name)}">${esc(e.name)}${isHome?'<span class="mi-home-tag">自クラン</span>':''}</div>
-          <div class="mi-rank-score">${e.scoreRaw ? esc(e.scoreRaw) : 'ー'}</div>
+          <div class="mi-rank-score">${scoreDisplay ? esc(scoreDisplay) : 'ー'}</div>
         </div>`;
       }).join('');
 
@@ -907,10 +908,11 @@
     const rows = dates.map(d=>{
       const rec = getRankedListForDate(scope, d).find(e=>e.name===name);
       const rankCell = rec && rec.displayRank!=null ? rankBadge(rec.displayRank) : 'ー';
+      const scoreDisplay = rec ? formatScoreForScope(rec.scoreNum, scope) : '';
       return `<tr>
         <td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</td>
         <td>${rankCell}</td>
-        <td style="font-family:'JetBrains Mono',monospace;">${rec && rec.scoreRaw ? esc(rec.scoreRaw) : 'ー'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;">${scoreDisplay ? esc(scoreDisplay) : 'ー'}</td>
       </tr>`;
     }).join('');
     const formerNames = (settings.nameHistory && settings.nameHistory[scope] && settings.nameHistory[scope][name]) || [];
@@ -1095,7 +1097,7 @@
         const matches = entries.filter(e=>e.name===name && e.scoreNum!=null && getWeekday(e.date)===w);
         if(!matches.length) return null;
         const best = matches.reduce((a,b)=> b.scoreNum>a.scoreNum?b:a);
-        return best.scoreRaw;
+        return formatScoreForScope(best.scoreNum, scope);
       });
       return {name, cells};
     });
@@ -1173,7 +1175,7 @@
       const own = entries.filter(e=>e.name===name && e.scoreNum!=null);
       if(!own.length) return null;
       const best = own.reduce((a,b)=> b.scoreNum>a.scoreNum?b:a);
-      return {name, best: best.scoreNum, date: best.date, scoreRaw: best.scoreRaw};
+      return {name, best: best.scoreNum, date: best.date, scoreRaw: formatScoreForScope(best.scoreNum, scope)};
     }).filter(Boolean);
     rows.sort((a,b)=>b.best-a.best);
 
@@ -1335,7 +1337,7 @@
                   <option value="">未選択</option>
                   ${orderedRoster.map(m=>`<option value="${esc(m)}" ${m===selectedName?'selected':''}>${esc(m)}</option>`).join('')}
                 </select>
-                <input class="mi-input" data-rank-score="${rank}" placeholder="任意" value="${rec&&rec.scoreRaw?esc(rec.scoreRaw):''}">
+                <input class="mi-input" data-rank-score="${rank}" placeholder="任意" value="${rec?esc(formatScoreForScope(rec.scoreNum, scope)):''}">
               </div>`;
             }).join(''); })()}
           </div>
@@ -1346,7 +1348,7 @@
               const rec = entries.find(e=>e.date===bulkDate && e.name===m);
               return `<div class="mi-bulk-row">
                 <div class="mi-bulk-name">${esc(m)}</div>
-                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="631.87" value="${rec?esc(rec.scoreRaw):''}">
+                <input class="mi-input" data-bulk-name="${esc(m)}" placeholder="631.87" value="${rec?esc(formatScoreForScope(rec.scoreNum, scope)):''}">
               </div>`;
             }).join('')}
           </div>
@@ -1391,14 +1393,16 @@
             <th></th>
           </tr></thead>
           <tbody>
-          ${manageEntries.length ? manageEntries.map(e=>`
-            <tr>
+          ${manageEntries.length ? manageEntries.map(e=>{
+            const scoreDisplay = formatScoreForScope(e.scoreNum, scope);
+            return `<tr>
               <td style="font-family:'JetBrains Mono',monospace;">${e.date}</td>
               <td>${esc(e.name)}</td>
-              <td style="font-family:'JetBrains Mono',monospace;">${e.scoreRaw?esc(e.scoreRaw):'ー'}</td>
+              <td style="font-family:'JetBrains Mono',monospace;">${scoreDisplay?esc(scoreDisplay):'ー'}</td>
               <td style="font-family:'JetBrains Mono',monospace;">${e.rank!=null?e.rank:'ー'}</td>
               <td><button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deleteEntry" data-val="${e.id}">削除</button></td>
-            </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}
+            </tr>`;
+          }).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}
           </tbody>
         </table>
         </div>
