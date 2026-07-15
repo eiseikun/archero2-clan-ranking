@@ -1083,13 +1083,16 @@
     return `
       <div class="mi-subtabs">
         <div class="mi-subtab ${sd.tableSub==='avgRank'?'active':''}" data-action="tableSub" data-val="avgRank">平均順位</div>
+        <div class="mi-subtab ${sd.tableSub==='avgScore'?'active':''}" data-action="tableSub" data-val="avgScore">平均スコア</div>
         <div class="mi-subtab ${sd.tableSub==='bestScore'?'active':''}" data-action="tableSub" data-val="bestScore">個人別最高スコア</div>
       </div>`;
   }
   function renderTableContent(){
     if(state.scope!=='internal') return renderTableCross();
     const sd = scopedState();
-    return sd.tableSub==='avgRank' ? renderAvgRankTable() : renderBestScoreTable();
+    if(sd.tableSub==='avgRank') return renderAvgRankTable();
+    if(sd.tableSub==='avgScore') return renderAvgScoreTable();
+    return renderBestScoreTable();
   }
 
   function renderTableCross(){
@@ -1166,6 +1169,52 @@
         <div class="mi-scroll-x">
         <table class="mi-table">
           <thead><tr><th>順位</th><th>名前</th><th>平均順位</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        </div>
+      </div>`;
+  }
+
+  function renderAvgScoreTable(){
+    const scope = 'internal';
+    const sd = scopedState();
+    const entries = getEntries(scope);
+    const allDatesAsc = [...new Set(entries.map(e=>e.date))].sort();
+    const start = sd.tableRangeStart || (allDatesAsc[0]||todayStr());
+    const end = sd.tableRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
+    const activeDates = allDatesAsc.filter(d=> d>=start && d<=end);
+    // Require score data on at least half the days in range (min 1) before a
+    // member is eligible for the average-score ranking. Without this, someone
+    // who only ever placed once — with a single lucky high score — would
+    // otherwise show a misleadingly high "average" based on just one data point.
+    const minCount = Math.max(1, Math.ceil(activeDates.length * 0.5));
+
+    const roster = scopeAllKnown(scope);
+    let rows = roster.map(name=>{
+      const scores = activeDates
+        .map(d=>{
+          const rec = entries.find(e=>e.date===d && e.name===name);
+          return rec && rec.scoreNum!=null ? rec.scoreNum : null;
+        })
+        .filter(v=>v!=null);
+      if(scores.length < minCount) return null;
+      const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
+      return {name, avg, count:scores.length};
+    }).filter(Boolean);
+    rows.sort((a,b)=>b.avg-a.avg);
+
+    const body = rows.length ? rows.map((r,i)=>`
+      <tr><td>${rankBadge(i+1)}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${esc(formatScoreForScope(r.avg, scope))}</td><td style="font-family:'JetBrains Mono',monospace;color:var(--text-faint);font-size:11px;">${r.count}/${activeDates.length}日</td></tr>
+    `).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">対象期間に十分なスコアデータがある人がいません</td></tr>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">📊 平均スコア</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">対象期間の半分未満しかスコアが記録されていない人は、1日だけの好記録で平均が歪まないよう除外しています（最低${minCount}日分のデータが必要）。</div>
+        ${renderDateRangePicker(sd, start, end, 'table')}
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>順位</th><th>名前</th><th>平均スコア</th><th>記録日数</th></tr></thead>
           <tbody>${body}</tbody>
         </table>
         </div>
