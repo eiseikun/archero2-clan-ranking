@@ -269,7 +269,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: todayStr(), registerMode:'manual', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'manual', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -425,6 +425,11 @@
   }
   function todayStr(){
     const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function yesterdayStr(){
+    const d = new Date();
+    d.setDate(d.getDate()-1);
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
   function fmtDateJP(dateStr){
@@ -1216,7 +1221,7 @@
     const lbl = scopeLabel(scope);
     const roster = scopeRoster(scope);
     const visibleRoster = getVisibleRoster(scope);
-    const bulkDate = sd.bulkDate || todayStr();
+    const bulkDate = sd.bulkDate || yesterdayStr();
     const entries = getEntries(scope);
 
     const allDatesForScope = [...new Set(entries.map(e=>e.date))].sort();
@@ -1308,15 +1313,15 @@
 
         ${sd.registerMode==='paste' ? `
           <div class="mi-note" style="margin-top:0;">
-            スクショをAIに読み取ってもらい、「順位,名前,スコア」をカンマ区切りで繰り返す形式（例: <code>1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T</code>）で出力してもらってください。改行区切りでも構いません（カンマと同じ扱いにします）。それをそのまま下に貼り付けて登録できます。
+            スクショをAIに読み取ってもらい、「順位,名前,スコア」をカンマ区切りで繰り返す形式（例: <code>${scope==='cross' ? '1,魔導特務隊,639.11T,2,最狂会,458.83T' : '1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T'}</code>）で出力してもらってください。改行区切りでも構いません（カンマと同じ扱いにします）。それをそのまま下に貼り付けて登録できます。
           </div>
           <div class="mi-field">
             <label class="mi-label">日付</label>
-            ${renderSingleDatePicker(sd, sd.pasteDate||todayStr(), 'pasteDate')}
+            ${renderSingleDatePicker(sd, sd.pasteDate||yesterdayStr(), 'pasteDate')}
           </div>
           <div class="mi-field">
             <label class="mi-label">貼り付け</label>
-            <textarea class="mi-input" id="mi-paste-text" rows="6" style="resize:vertical;font-family:'JetBrains Mono',monospace;" placeholder="1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T..."></textarea>
+            <textarea class="mi-input" id="mi-paste-text" rows="6" style="resize:vertical;font-family:'JetBrains Mono',monospace;" placeholder="${scope==='cross' ? '1,魔導特務隊,639.11T,2,最狂会,458.83T...' : '1,えいせい,2.56T,2,モジュ,2.23T,3,にゃんこ船長,1.98T...'}"></textarea>
           </div>
           <button class="mi-btn mi-btn-gold" data-action="pasteRegister">この内容で登録</button>
         ` : `
@@ -1664,7 +1669,7 @@
     }
 
     if(action==='bulkRegister'){
-      const date = sd.bulkDate || todayStr();
+      const date = sd.bulkDate || yesterdayStr();
       if(!date){ showToast('日付を選択してください'); return; }
       const inputs = document.querySelectorAll('[data-bulk-name]');
       let arr = getEntries(scope);
@@ -1688,7 +1693,7 @@
     }
 
     if(action==='bulkRegisterRanked'){
-      const date = sd.bulkDate || todayStr();
+      const date = sd.bulkDate || yesterdayStr();
       if(!date){ showToast('日付を選択してください'); return; }
       let arr = getEntries(scope);
       const seen = new Set();
@@ -1726,7 +1731,7 @@
     }
 
     if(action==='pasteRegister'){
-      const date = sd.pasteDate || todayStr();
+      const date = sd.pasteDate || yesterdayStr();
       const textEl = document.getElementById('mi-paste-text');
       const text = textEl ? textEl.value : '';
       const rows = parseFlatTriplets(text);
