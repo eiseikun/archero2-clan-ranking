@@ -77,6 +77,8 @@
     color:var(--text-dim);cursor:pointer;letter-spacing:.02em;
   }
   .mi-admin-btn.active{border-color:var(--gold);color:var(--gold-soft);background:rgba(212,175,55,.12);}
+  .mi-admin-btn-ghost{padding:7px 11px;opacity:.55;}
+  .mi-admin-btn-ghost.active{opacity:1;border-color:var(--cyan);color:var(--cyan);background:rgba(69,196,176,.12);}
 
   .mi-tabs{display:flex;gap:6px;margin:0 0 16px;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:5px;}
   .mi-tab{
@@ -252,6 +254,7 @@
   const memberEntriesRef = doc(db, COLLECTION, 'memberEntries');
   const clanEntriesRef   = doc(db, COLLECTION, 'clanEntries');
   const settingsRef      = doc(db, COLLECTION, 'settings');
+  const personalRef      = doc(db, COLLECTION, 'personal');
 
 (function(){
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
@@ -264,10 +267,11 @@
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
   let settings = {...DEFAULT_SETTINGS};
+  let personalData = {password:'private123', list:[], raids:[]}; // list: {id,date,label,valueRaw,valueNum}; raids: {id,date,raid1Raw,raid1Num,raid2Raw,raid2Num}
   let toastMsg = null;
   let toastTimer = null;
 
-  let loadedMembers = false, loadedClans = false, loadedSettings = false;
+  let loadedMembers = false, loadedClans = false, loadedSettings = false, loadedPersonal = false;
 
   function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'manual', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
@@ -281,6 +285,11 @@
     tab:'ranking',
     adminLoggedIn:false,
     adminErr:false,
+    personalLoggedIn:false,
+    personalErr:false,
+    personalTab:'log', // 'log' | 'table' | 'graph'
+    personalGraphMetric:'total', // 'total' | 'each'
+    personalGraphWeekdays:[], // empty = all weekdays
     collapse:{},
     modal:null, // {scope, name} | null
     scopeData:{ internal: freshScoped(), cross: freshScoped() }
@@ -336,6 +345,12 @@
       loadedSettings = true;
       render();
     }, err=>{ console.error(err); showToast('設定の取得に失敗しました'); });
+
+    onSnapshot(personalRef, snap=>{
+      personalData = snap.exists() ? Object.assign({password:'private123', list:[], raids:[]}, snap.data()) : {password:'private123', list:[], raids:[]};
+      loadedPersonal = true;
+      render();
+    }, err=>{ console.error(err); showToast('個人記録の取得に失敗しました'); });
   }
 
   async function saveMemberEntries(){
@@ -348,6 +363,10 @@
   }
   async function saveSettings(){
     try{ await setDoc(settingsRef, settings); }
+    catch(e){ console.error(e); showToast('保存に失敗しました'); }
+  }
+  async function savePersonalData(){
+    try{ await setDoc(personalRef, personalData); }
     catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
 
@@ -795,7 +814,7 @@
 
   // ---------- render root ----------
   function render(){
-    if(!(loadedMembers && loadedClans && loadedSettings)){
+    if(!(loadedMembers && loadedClans && loadedSettings && loadedPersonal)){
       app.innerHTML = `<div class="mi-empty" style="padding:60px 0;">⏳ Firestoreに接続中...</div>`;
       return;
     }
@@ -812,6 +831,7 @@
       ${state.tab==='graph' ? renderGraph() : ''}
       ${state.tab==='table' ? renderTableControls() + renderCaptureButton() + `<div id="mi-capture-area">${renderTableContent()}</div>` : ''}
       ${state.tab==='admin' ? renderAdmin() : ''}
+      ${state.tab==='personal' ? renderPersonal() : ''}
       <div class="mi-footer-note">・クラン内メンバーとクロスサーバーのクラン、それぞれの順位を記録・比較できます</div>
       ${toastMsg ? `<div class="mi-toast">✓ ${esc(toastMsg)}</div>` : ''}
       ${state.modal ? renderModal() : ''}
@@ -834,7 +854,8 @@
   }
 
   function renderAdminButtonRow(){
-    return `<div style="display:flex;justify-content:flex-end;margin-top:6px;">
+    return `<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px;">
+      <div class="mi-admin-btn mi-admin-btn-ghost ${state.tab==='personal'?'active':''}" data-action="tab" data-val="personal">🔒</div>
       <div class="mi-admin-btn ${state.tab==='admin'?'active':''}" data-action="tab" data-val="admin">⚙ 管理者</div>
     </div>`;
   }
@@ -1468,6 +1489,227 @@
     `;
   }
 
+  // ---------- personal records (private area, separate password from admin) ----------
+  function personalRaidTotal(r){
+    const vals = [r.raid1Num, r.raid2Num].filter(v=>v!=null);
+    return vals.length ? vals.reduce((a,b)=>a+b,0) : null;
+  }
+
+  function renderPersonal(){
+    if(!state.personalLoggedIn){
+      return `
+      <div class="mi-panel mi-lockgate">
+        <div class="mi-lock-icon">🔒</div>
+        <div class="mi-panel-title" style="justify-content:center;">個人記録</div>
+        <div class="mi-note" style="margin-top:0;">ここは自分専用のスペースです。管理者パスワードとは別のパスワードでログインします。</div>
+        <div class="mi-field" style="text-align:left;max-width:260px;margin:0 auto 10px;">
+          <label class="mi-label">パスワード</label>
+          <input class="mi-input" type="password" id="mi-personal-pw" placeholder="パスワードを入力">
+        </div>
+        <button class="mi-btn mi-btn-gold" data-action="personalLogin">ログイン</button>
+        ${state.personalErr ? `<div class="mi-err">パスワードが違います</div>` : ''}
+      </div>`;
+    }
+
+    return `
+      <div class="mi-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="mi-panel-title" style="margin:0;">🔒 個人記録</div>
+          <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="personalLogout">ログアウト</button>
+        </div>
+      </div>
+      <div class="mi-subtabs">
+        <div class="mi-subtab ${state.personalTab==='log'?'active':''}" data-action="personalTab" data-val="log">📝 記録</div>
+        <div class="mi-subtab ${state.personalTab==='table'?'active':''}" data-action="personalTab" data-val="table">📋 表</div>
+        <div class="mi-subtab ${state.personalTab==='graph'?'active':''}" data-action="personalTab" data-val="graph">📈 グラフ</div>
+      </div>
+      ${state.personalTab==='log' ? renderPersonalLog() : ''}
+      ${state.personalTab==='table' ? renderPersonalCaptureButton() + `<div id="mi-capture-area">${renderPersonalTable()}</div>` : ''}
+      ${state.personalTab==='graph' ? renderPersonalGraph() : ''}
+      <div class="mi-note">※ この「個人記録」は別パスワードで区切られていますが、管理者ログインと同じ仕組み（画面上でのパスワード確認のみ）です。本気で見ようとする第三者からの完全な秘匿は保証できません。</div>
+    `;
+  }
+
+  function renderPersonalCaptureButton(){
+    return `<div style="margin-bottom:14px;text-align:right;">
+      <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="captureTable">📸 画像として保存</button>
+    </div>`;
+  }
+
+  function renderPersonalLog(){
+    const sd = scopedState();
+    const raidDate = sd.personalRaidDate || todayStr();
+    const existingRaid = (personalData.raids||[]).find(r=>r.date===raidDate);
+
+    const raids = [...(personalData.raids||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
+    const raidRows = raids.length ? raids.map(r=>{
+      const total = personalRaidTotal(r);
+      return `<div class="mi-roster-row">
+        <span class="mi-roster-name" style="flex-direction:column;align-items:flex-start;display:flex;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);">${fmtDateJP(r.date)}</span>
+          <span style="font-family:'JetBrains Mono',monospace;">
+            討伐1: ${r.raid1Raw?esc(r.raid1Raw):'ー'}　討伐2: ${r.raid2Raw?esc(r.raid2Raw):'ー'}　
+            <span style="color:var(--cyan);">合計: ${total!=null?esc(formatScoreForScope(total,'internal')):'ー'}</span>
+          </span>
+        </span>
+        <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRaid" data-val="${r.id}">削除</button>
+      </div>`;
+    }).join('') : `<div class="mi-empty" style="padding:14px 0;">まだ討伐スコアの記録がありません</div>`;
+
+    const list = [...(personalData.list||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
+    const rows = list.length ? list.map(r=>`
+      <div class="mi-roster-row">
+        <span class="mi-roster-name" style="flex-direction:column;align-items:flex-start;display:flex;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);">${fmtDateJP(r.date)}</span>
+          <span>${esc(r.label)}${r.valueRaw ? `　<span style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">${esc(r.valueRaw)}</span>` : ''}</span>
+        </span>
+        <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRecord" data-val="${r.id}">削除</button>
+      </div>`).join('') : `<div class="mi-empty" style="padding:14px 0;">まだメモがありません</div>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">🗡 討伐スコアを記録</div>
+        <div class="mi-note" style="margin-top:0;">1日2回討伐の合計とは別に、1回ごとの討伐スコアを任意で記録できます（どちらか片方だけでもOK）。</div>
+        <div class="mi-field">
+          <label class="mi-label">日付</label>
+          ${renderSingleDatePicker(sd, raidDate, 'personalRaidDate')}
+        </div>
+        <div class="mi-row2">
+          <div class="mi-field">
+            <label class="mi-label">討伐1（任意）</label>
+            <input class="mi-input" id="mi-personal-raid1" placeholder="例：12.5T" value="${existingRaid&&existingRaid.raid1Raw?esc(existingRaid.raid1Raw):''}">
+          </div>
+          <div class="mi-field">
+            <label class="mi-label">討伐2（任意）</label>
+            <input class="mi-input" id="mi-personal-raid2" placeholder="例：13.1T" value="${existingRaid&&existingRaid.raid2Raw?esc(existingRaid.raid2Raw):''}">
+          </div>
+        </div>
+        <button class="mi-btn mi-btn-gold" data-action="savePersonalRaid">保存</button>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">🗡 討伐スコア履歴</div>
+        ${raidRows}
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">✏️ メモを追加</div>
+        <div class="mi-field">
+          <label class="mi-label">日付</label>
+          ${renderSingleDatePicker(sd, sd.personalDate||todayStr(), 'personalDate')}
+        </div>
+        <div class="mi-field">
+          <label class="mi-label">内容</label>
+          <input class="mi-input" id="mi-personal-label" placeholder="例：降臨スコア自己ベスト">
+        </div>
+        <div class="mi-field">
+          <label class="mi-label">数値（任意）</label>
+          <input class="mi-input" id="mi-personal-value" placeholder="例：12.5T（空欄でも可）">
+        </div>
+        <button class="mi-btn mi-btn-gold" data-action="addPersonalRecord">追加</button>
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">📖 メモ一覧</div>
+        ${rows}
+      </div>
+
+      <div class="mi-panel">
+        <div class="mi-panel-title">🔑 パスワード変更</div>
+        <div class="mi-row2">
+          <input class="mi-input" id="mi-personal-new-password" placeholder="新しいパスワード">
+          <button class="mi-btn" data-action="savePersonalPassword">変更</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPersonalTable(){
+    const raids = personalData.raids || [];
+    const totalBest = {}, eachBest = {};
+    raids.forEach(r=>{
+      const w = getWeekday(r.date);
+      const total = personalRaidTotal(r);
+      if(total!=null && (!totalBest[w] || total>totalBest[w].value)) totalBest[w] = {value: total, date: r.date};
+      [r.raid1Num, r.raid2Num].forEach(v=>{
+        if(v!=null && (!eachBest[w] || v>eachBest[w].value)) eachBest[w] = {value: v, date: r.date};
+      });
+    });
+
+    function tableFor(bestMap, label){
+      const body = WEEKDAYS.map(w=>{
+        const b = bestMap[w];
+        return `<tr>
+          <td>${w}</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${b?esc(formatScoreForScope(b.value,'internal')):'ー'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;color:var(--text-faint);">${b?fmtDateJP(b.date):'ー'}</td>
+        </tr>`;
+      }).join('');
+      return `
+        <div class="mi-panel">
+          <div class="mi-panel-title">${label}</div>
+          <table class="mi-table">
+            <thead><tr><th>曜日</th><th>最高スコア</th><th>達成日</th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`;
+    }
+
+    if(!raids.length){
+      return `<div class="mi-panel"><div class="mi-empty">まだ討伐スコアの記録がありません。「📝 記録」タブから登録してください。</div></div>`;
+    }
+    return tableFor(totalBest, '📋 2討伐合計：曜日別ベスト') + tableFor(eachBest, '📋 1討伐：曜日別ベスト');
+  }
+
+  function renderPersonalGraph(){
+    const sd = scopedState();
+    const raids = personalData.raids || [];
+    const allDatesAsc = [...new Set(raids.map(r=>r.date))].sort();
+    const start = sd.personalGraphRangeStart || (allDatesAsc[0]||todayStr());
+    const end = sd.personalGraphRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
+    const weekdays = state.personalGraphWeekdays;
+
+    const dates = allDatesAsc.filter(d=>
+      d>=start && d<=end && (weekdays.length===0 || weekdays.includes(getWeekday(d)))
+    );
+
+    let series;
+    if(state.personalGraphMetric==='each'){
+      series = [
+        {clan:'討伐1', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r&&r.raid1Num!=null ? r.raid1Num : null; })},
+        {clan:'討伐2', color:LINE_COLORS[1], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r&&r.raid2Num!=null ? r.raid2Num : null; })}
+      ];
+    } else {
+      series = [
+        {clan:'合計', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r ? personalRaidTotal(r) : null; })}
+      ];
+    }
+
+    let chart = `<div class="mi-empty">対象期間にデータがありません</div>`;
+    if(dates.length){
+      chart = buildLineChart(dates, series, {invert:false, labelFormatter: v=>formatShort(v)});
+    }
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">期間</div>
+        ${renderDateRangePicker(sd, start, end, 'personalGraphRange')}
+
+        <div class="mi-panel-title" style="margin-top:14px;">曜日で絞り込み（複数選択可・未選択なら全曜日）</div>
+        <div class="mi-pillrow" id="mi-personal-weekday-pillrow" data-preserve-scroll>
+          ${WEEKDAYS.map(w=>`<div class="mi-pill ${weekdays.includes(w)?'active':''}" data-action="personalGraphWeekday" data-val="${w}">${w}</div>`).join('')}
+        </div>
+
+        <div class="mi-panel-title" style="margin-top:14px;">表示する指標</div>
+        <div class="mi-subtabs">
+          <div class="mi-subtab ${state.personalGraphMetric==='total'?'active':''}" data-action="personalGraphMetric" data-val="total">2討伐合計</div>
+          <div class="mi-subtab ${state.personalGraphMetric==='each'?'active':''}" data-action="personalGraphMetric" data-val="each">1討伐（個別）</div>
+        </div>
+
+        ${chart}
+      </div>`;
+  }
+
   // ---------- event delegation ----------
   app.addEventListener('click', async (ev)=>{
     const el = ev.target.closest('[data-action]');
@@ -1574,6 +1816,93 @@
       render(); return;
     }
     if(action==='adminLogout'){ state.adminLoggedIn = false; render(); return; }
+
+    if(action==='personalLogin'){
+      const pw = document.getElementById('mi-personal-pw').value;
+      if(pw === personalData.password){
+        state.personalLoggedIn = true; state.personalErr = false;
+      } else {
+        state.personalErr = true;
+      }
+      render(); return;
+    }
+    if(action==='personalLogout'){ state.personalLoggedIn = false; render(); return; }
+    if(action==='personalTab'){ state.personalTab = val; render(); return; }
+    if(action==='personalGraphWeekday'){
+      state.personalGraphWeekdays = state.personalGraphWeekdays.includes(val)
+        ? state.personalGraphWeekdays.filter(w=>w!==val)
+        : [...state.personalGraphWeekdays, val];
+      render(); return;
+    }
+    if(action==='personalGraphMetric'){ state.personalGraphMetric = val; render(); return; }
+
+    if(action==='savePersonalRaid'){
+      const date = sd.personalRaidDate || todayStr();
+      const r1Input = document.getElementById('mi-personal-raid1');
+      const r2Input = document.getElementById('mi-personal-raid2');
+      const raid1RawInput = r1Input ? r1Input.value.trim() : '';
+      const raid2RawInput = r2Input ? r2Input.value.trim() : '';
+      if(!raid1RawInput && !raid2RawInput){ showToast('討伐1・討伐2のどちらか一方は入力してください'); return; }
+      let raid1Raw='', raid1Num=null, raid2Raw='', raid2Num=null;
+      if(raid1RawInput){
+        const p = parseImportedScore(raid1RawInput, 'internal');
+        if(p.scoreNum!=null){ raid1Raw = p.scoreRaw; raid1Num = p.scoreNum; }
+      }
+      if(raid2RawInput){
+        const p = parseImportedScore(raid2RawInput, 'internal');
+        if(p.scoreNum!=null){ raid2Raw = p.scoreRaw; raid2Num = p.scoreNum; }
+      }
+      if(!personalData.raids) personalData.raids = [];
+      const idx = personalData.raids.findIndex(r=>r.date===date);
+      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, raid1Raw, raid1Num, raid2Raw, raid2Num};
+      if(idx>=0) personalData.raids[idx] = rec; else personalData.raids.push(rec);
+      await savePersonalData();
+      showToast('討伐スコアを保存しました');
+      return;
+    }
+    if(action==='deletePersonalRaid'){
+      personalData.raids = (personalData.raids||[]).filter(r=>r.id!==val);
+      await savePersonalData();
+      render();
+      return;
+    }
+
+    if(action==='addPersonalRecord'){
+      const date = sd.personalDate || todayStr();
+      const labelInput = document.getElementById('mi-personal-label');
+      const valueInput = document.getElementById('mi-personal-value');
+      const label = labelInput ? labelInput.value.trim() : '';
+      const valueRawInput = valueInput ? valueInput.value.trim() : '';
+      if(!label){ showToast('内容を入力してください'); return; }
+      let valueRaw = '', valueNum = null;
+      if(valueRawInput){
+        const parsed = parseScore(valueRawInput);
+        if(!isNaN(parsed)){ valueNum = parsed; valueRaw = valueRawInput; }
+      }
+      if(!personalData.list) personalData.list = [];
+      personalData.list.push({id: uid(), date, label, valueRaw, valueNum});
+      await savePersonalData();
+      if(labelInput) labelInput.value = '';
+      if(valueInput) valueInput.value = '';
+      showToast('記録しました');
+      return;
+    }
+    if(action==='deletePersonalRecord'){
+      personalData.list = (personalData.list||[]).filter(r=>r.id!==val);
+      await savePersonalData();
+      render();
+      return;
+    }
+    if(action==='savePersonalPassword'){
+      const input = document.getElementById('mi-personal-new-password');
+      const newPw = input ? input.value.trim() : '';
+      if(!newPw){ showToast('新しいパスワードを入力してください'); return; }
+      personalData.password = newPw;
+      await savePersonalData();
+      if(input) input.value = '';
+      showToast('パスワードを変更しました');
+      return;
+    }
 
     if(action==='saveClanName'){
       const name = document.getElementById('mi-clanname').value.trim();
