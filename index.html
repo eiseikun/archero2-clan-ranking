@@ -437,6 +437,14 @@
     if(baseCount >= 1000) return trimNum(scoreNum/cfg.upMult) + cfg.upUnit;
     return cfg.showBaseSuffix ? (trimNum(baseCount)+cfg.unit) : trimNum(baseCount);
   }
+  // CSV export uses a plain-number convention: always expressed in the
+  // scope's base unit (B for internal, T for cross), never upgraded to the
+  // next unit, and with no unit letter at all — e.g. internal 3.56T -> "3560".
+  function formatScoreForCsv(scoreNum, scope){
+    if(scoreNum==null || isNaN(scoreNum)) return '';
+    const cfg = scopeUnitConfig(scope);
+    return trimNum(scoreNum/cfg.mult);
+  }
   function getWeekday(dateStr){
     const d = new Date(dateStr+'T00:00:00');
     const map = ['日','月','火','水','木','金','土'];
@@ -706,7 +714,7 @@
   function entriesToCsv(entries, lbl, scope){
     const rows = [['date', lbl.title==='クラン'?'clan':'member', 'score', 'rank']];
     [...entries].sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:a.name.localeCompare(b.name)))
-      .forEach(e=> rows.push([e.date, e.name, formatScoreForScope(e.scoreNum, scope), e.rank!=null?e.rank:'']));
+      .forEach(e=> rows.push([e.date, e.name, formatScoreForCsv(e.scoreNum, scope), e.rank!=null?e.rank:'']));
     return rows.map(r=>r.map(v=>{
       const s = String(v);
       return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
@@ -1490,11 +1498,6 @@
   }
 
   // ---------- personal records (private area, separate password from admin) ----------
-  function personalRaidTotal(r){
-    const vals = [r.raid1Num, r.raid2Num].filter(v=>v!=null);
-    return vals.length ? vals.reduce((a,b)=>a+b,0) : null;
-  }
-
   function renderPersonal(){
     if(!state.personalLoggedIn){
       return `
@@ -1538,41 +1541,33 @@
 
   function renderPersonalLog(){
     const sd = scopedState();
-    const raidDate = sd.personalRaidDate || todayStr();
+    const raidDate = sd.personalRaidDate || yesterdayStr();
     const existingRaid = (personalData.raids||[]).find(r=>r.date===raidDate);
 
     const raids = [...(personalData.raids||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
-    const raidRows = raids.length ? raids.map(r=>{
-      const total = personalRaidTotal(r);
-      return `<div class="mi-roster-row">
-        <span class="mi-roster-name" style="flex-direction:column;align-items:flex-start;display:flex;">
-          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);">${fmtDateJP(r.date)}</span>
-          <span style="font-family:'JetBrains Mono',monospace;">
-            討伐1: ${r.raid1Raw?esc(r.raid1Raw):'ー'}　討伐2: ${r.raid2Raw?esc(r.raid2Raw):'ー'}　
-            <span style="color:var(--cyan);">合計: ${total!=null?esc(formatScoreForScope(total,'internal')):'ー'}</span>
-          </span>
-        </span>
-        <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRaid" data-val="${r.id}">削除</button>
-      </div>`;
-    }).join('') : `<div class="mi-empty" style="padding:14px 0;">まだ討伐スコアの記録がありません</div>`;
-
-    const list = [...(personalData.list||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
-    const rows = list.length ? list.map(r=>`
+    const raidRows = raids.length ? raids.map(r=>`
       <div class="mi-roster-row">
         <span class="mi-roster-name" style="flex-direction:column;align-items:flex-start;display:flex;">
           <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);">${fmtDateJP(r.date)}</span>
-          <span>${esc(r.label)}${r.valueRaw ? `　<span style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">${esc(r.valueRaw)}</span>` : ''}</span>
+          <span style="font-family:'JetBrains Mono',monospace;">
+            <span style="color:var(--cyan);">合計: ${r.totalRaw?esc(r.totalRaw):'ー'}</span>　
+            討伐1: ${r.raid1Raw?esc(r.raid1Raw):'ー'}　討伐2: ${r.raid2Raw?esc(r.raid2Raw):'ー'}
+          </span>
         </span>
-        <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRecord" data-val="${r.id}">削除</button>
-      </div>`).join('') : `<div class="mi-empty" style="padding:14px 0;">まだメモがありません</div>`;
+        <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRaid" data-val="${r.id}">削除</button>
+      </div>`).join('') : `<div class="mi-empty" style="padding:14px 0;">まだ討伐スコアの記録がありません</div>`;
 
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">🗡 討伐スコアを記録</div>
-        <div class="mi-note" style="margin-top:0;">1日2回討伐の合計とは別に、1回ごとの討伐スコアを任意で記録できます（どちらか片方だけでもOK）。</div>
+        <div class="mi-note" style="margin-top:0;">2討伐合計は必須、討伐1・討伐2それぞれの内訳は任意です。</div>
         <div class="mi-field">
           <label class="mi-label">日付</label>
           ${renderSingleDatePicker(sd, raidDate, 'personalRaidDate')}
+        </div>
+        <div class="mi-field">
+          <label class="mi-label">2討伐合計（必須）</label>
+          <input class="mi-input" id="mi-personal-total" placeholder="例：25.6T" value="${existingRaid&&existingRaid.totalRaw?esc(existingRaid.totalRaw):''}">
         </div>
         <div class="mi-row2">
           <div class="mi-field">
@@ -1593,28 +1588,6 @@
       </div>
 
       <div class="mi-panel">
-        <div class="mi-panel-title">✏️ メモを追加</div>
-        <div class="mi-field">
-          <label class="mi-label">日付</label>
-          ${renderSingleDatePicker(sd, sd.personalDate||todayStr(), 'personalDate')}
-        </div>
-        <div class="mi-field">
-          <label class="mi-label">内容</label>
-          <input class="mi-input" id="mi-personal-label" placeholder="例：降臨スコア自己ベスト">
-        </div>
-        <div class="mi-field">
-          <label class="mi-label">数値（任意）</label>
-          <input class="mi-input" id="mi-personal-value" placeholder="例：12.5T（空欄でも可）">
-        </div>
-        <button class="mi-btn mi-btn-gold" data-action="addPersonalRecord">追加</button>
-      </div>
-
-      <div class="mi-panel">
-        <div class="mi-panel-title">📖 メモ一覧</div>
-        ${rows}
-      </div>
-
-      <div class="mi-panel">
         <div class="mi-panel-title">🔑 パスワード変更</div>
         <div class="mi-row2">
           <input class="mi-input" id="mi-personal-new-password" placeholder="新しいパスワード">
@@ -1629,7 +1602,7 @@
     const totalBest = {}, eachBest = {};
     raids.forEach(r=>{
       const w = getWeekday(r.date);
-      const total = personalRaidTotal(r);
+      const total = r.totalNum;
       if(total!=null && (!totalBest[w] || total>totalBest[w].value)) totalBest[w] = {value: total, date: r.date};
       [r.raid1Num, r.raid2Num].forEach(v=>{
         if(v!=null && (!eachBest[w] || v>eachBest[w].value)) eachBest[w] = {value: v, date: r.date};
@@ -1681,7 +1654,7 @@
       ];
     } else {
       series = [
-        {clan:'合計', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r ? personalRaidTotal(r) : null; })}
+        {clan:'合計', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r && r.totalNum!=null ? r.totalNum : null; })}
       ];
     }
 
@@ -1837,12 +1810,16 @@
     if(action==='personalGraphMetric'){ state.personalGraphMetric = val; render(); return; }
 
     if(action==='savePersonalRaid'){
-      const date = sd.personalRaidDate || todayStr();
+      const date = sd.personalRaidDate || yesterdayStr();
+      const totalInput = document.getElementById('mi-personal-total');
       const r1Input = document.getElementById('mi-personal-raid1');
       const r2Input = document.getElementById('mi-personal-raid2');
+      const totalRawInput = totalInput ? totalInput.value.trim() : '';
       const raid1RawInput = r1Input ? r1Input.value.trim() : '';
       const raid2RawInput = r2Input ? r2Input.value.trim() : '';
-      if(!raid1RawInput && !raid2RawInput){ showToast('討伐1・討伐2のどちらか一方は入力してください'); return; }
+      if(!totalRawInput){ showToast('2討伐合計を入力してください'); return; }
+      const totalParsed = parseImportedScore(totalRawInput, 'internal');
+      if(totalParsed.scoreNum==null){ showToast('2討伐合計の形式を確認してください'); return; }
       let raid1Raw='', raid1Num=null, raid2Raw='', raid2Num=null;
       if(raid1RawInput){
         const p = parseImportedScore(raid1RawInput, 'internal');
@@ -1854,7 +1831,7 @@
       }
       if(!personalData.raids) personalData.raids = [];
       const idx = personalData.raids.findIndex(r=>r.date===date);
-      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, raid1Raw, raid1Num, raid2Raw, raid2Num};
+      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, totalRaw: totalParsed.scoreRaw, totalNum: totalParsed.scoreNum, raid1Raw, raid1Num, raid2Raw, raid2Num};
       if(idx>=0) personalData.raids[idx] = rec; else personalData.raids.push(rec);
       await savePersonalData();
       showToast('討伐スコアを保存しました');
@@ -1862,33 +1839,6 @@
     }
     if(action==='deletePersonalRaid'){
       personalData.raids = (personalData.raids||[]).filter(r=>r.id!==val);
-      await savePersonalData();
-      render();
-      return;
-    }
-
-    if(action==='addPersonalRecord'){
-      const date = sd.personalDate || todayStr();
-      const labelInput = document.getElementById('mi-personal-label');
-      const valueInput = document.getElementById('mi-personal-value');
-      const label = labelInput ? labelInput.value.trim() : '';
-      const valueRawInput = valueInput ? valueInput.value.trim() : '';
-      if(!label){ showToast('内容を入力してください'); return; }
-      let valueRaw = '', valueNum = null;
-      if(valueRawInput){
-        const parsed = parseScore(valueRawInput);
-        if(!isNaN(parsed)){ valueNum = parsed; valueRaw = valueRawInput; }
-      }
-      if(!personalData.list) personalData.list = [];
-      personalData.list.push({id: uid(), date, label, valueRaw, valueNum});
-      await savePersonalData();
-      if(labelInput) labelInput.value = '';
-      if(valueInput) valueInput.value = '';
-      showToast('記録しました');
-      return;
-    }
-    if(action==='deletePersonalRecord'){
-      personalData.list = (personalData.list||[]).filter(r=>r.id!==val);
       await savePersonalData();
       render();
       return;
