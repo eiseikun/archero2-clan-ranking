@@ -267,7 +267,7 @@
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
   let settings = {...DEFAULT_SETTINGS};
-  let personalData = {password:'private123', list:[], raids:[]}; // list: {id,date,label,valueRaw,valueNum}; raids: {id,date,raid1Raw,raid1Num,raid2Raw,raid2Num}
+  let personalData = {password:'private123', list:[], raids:[]}; // raids: {id,date,totalRaw,totalNum,raid1Raw,raid1Num}
   let toastMsg = null;
   let toastTimer = null;
 
@@ -1551,7 +1551,7 @@
           <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);">${fmtDateJP(r.date)}</span>
           <span style="font-family:'JetBrains Mono',monospace;">
             <span style="color:var(--cyan);">合計: ${r.totalRaw?esc(r.totalRaw):'ー'}</span>　
-            討伐1: ${r.raid1Raw?esc(r.raid1Raw):'ー'}　討伐2: ${r.raid2Raw?esc(r.raid2Raw):'ー'}
+            討伐1: ${r.raid1Raw?esc(r.raid1Raw):'ー'}
           </span>
         </span>
         <button class="mi-btn mi-btn-danger mi-btn-sm" data-action="deletePersonalRaid" data-val="${r.id}">削除</button>
@@ -1560,7 +1560,7 @@
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">🗡 討伐スコアを記録</div>
-        <div class="mi-note" style="margin-top:0;">2討伐合計は必須、討伐1・討伐2それぞれの内訳は任意です。</div>
+        <div class="mi-note" style="margin-top:0;">2討伐合計は必須、討伐1は任意です。</div>
         <div class="mi-field">
           <label class="mi-label">日付</label>
           ${renderSingleDatePicker(sd, raidDate, 'personalRaidDate')}
@@ -1569,15 +1569,9 @@
           <label class="mi-label">2討伐合計（必須）</label>
           <input class="mi-input" id="mi-personal-total" placeholder="例：25.6T" value="${existingRaid&&existingRaid.totalRaw?esc(existingRaid.totalRaw):''}">
         </div>
-        <div class="mi-row2">
-          <div class="mi-field">
-            <label class="mi-label">討伐1（任意）</label>
-            <input class="mi-input" id="mi-personal-raid1" placeholder="例：12.5T" value="${existingRaid&&existingRaid.raid1Raw?esc(existingRaid.raid1Raw):''}">
-          </div>
-          <div class="mi-field">
-            <label class="mi-label">討伐2（任意）</label>
-            <input class="mi-input" id="mi-personal-raid2" placeholder="例：13.1T" value="${existingRaid&&existingRaid.raid2Raw?esc(existingRaid.raid2Raw):''}">
-          </div>
+        <div class="mi-field">
+          <label class="mi-label">討伐1（任意）</label>
+          <input class="mi-input" id="mi-personal-raid1" placeholder="例：12.5T" value="${existingRaid&&existingRaid.raid1Raw?esc(existingRaid.raid1Raw):''}">
         </div>
         <button class="mi-btn mi-btn-gold" data-action="savePersonalRaid">保存</button>
       </div>
@@ -1604,9 +1598,8 @@
       const w = getWeekday(r.date);
       const total = r.totalNum;
       if(total!=null && (!totalBest[w] || total>totalBest[w].value)) totalBest[w] = {value: total, date: r.date};
-      [r.raid1Num, r.raid2Num].forEach(v=>{
-        if(v!=null && (!eachBest[w] || v>eachBest[w].value)) eachBest[w] = {value: v, date: r.date};
-      });
+      const v = r.raid1Num;
+      if(v!=null && (!eachBest[w] || v>eachBest[w].value)) eachBest[w] = {value: v, date: r.date};
     });
 
     function tableFor(bestMap, label){
@@ -1649,8 +1642,7 @@
     let series;
     if(state.personalGraphMetric==='each'){
       series = [
-        {clan:'討伐1', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r&&r.raid1Num!=null ? r.raid1Num : null; })},
-        {clan:'討伐2', color:LINE_COLORS[1], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r&&r.raid2Num!=null ? r.raid2Num : null; })}
+        {clan:'討伐1', color:LINE_COLORS[0], pts: dates.map(d=>{ const r = raids.find(x=>x.date===d); return r&&r.raid1Num!=null ? r.raid1Num : null; })}
       ];
     } else {
       series = [
@@ -1676,7 +1668,7 @@
         <div class="mi-panel-title" style="margin-top:14px;">表示する指標</div>
         <div class="mi-subtabs">
           <div class="mi-subtab ${state.personalGraphMetric==='total'?'active':''}" data-action="personalGraphMetric" data-val="total">2討伐合計</div>
-          <div class="mi-subtab ${state.personalGraphMetric==='each'?'active':''}" data-action="personalGraphMetric" data-val="each">1討伐（個別）</div>
+          <div class="mi-subtab ${state.personalGraphMetric==='each'?'active':''}" data-action="personalGraphMetric" data-val="each">討伐1</div>
         </div>
 
         ${chart}
@@ -1813,25 +1805,19 @@
       const date = sd.personalRaidDate || yesterdayStr();
       const totalInput = document.getElementById('mi-personal-total');
       const r1Input = document.getElementById('mi-personal-raid1');
-      const r2Input = document.getElementById('mi-personal-raid2');
       const totalRawInput = totalInput ? totalInput.value.trim() : '';
       const raid1RawInput = r1Input ? r1Input.value.trim() : '';
-      const raid2RawInput = r2Input ? r2Input.value.trim() : '';
       if(!totalRawInput){ showToast('2討伐合計を入力してください'); return; }
       const totalParsed = parseImportedScore(totalRawInput, 'internal');
       if(totalParsed.scoreNum==null){ showToast('2討伐合計の形式を確認してください'); return; }
-      let raid1Raw='', raid1Num=null, raid2Raw='', raid2Num=null;
+      let raid1Raw='', raid1Num=null;
       if(raid1RawInput){
         const p = parseImportedScore(raid1RawInput, 'internal');
         if(p.scoreNum!=null){ raid1Raw = p.scoreRaw; raid1Num = p.scoreNum; }
       }
-      if(raid2RawInput){
-        const p = parseImportedScore(raid2RawInput, 'internal');
-        if(p.scoreNum!=null){ raid2Raw = p.scoreRaw; raid2Num = p.scoreNum; }
-      }
       if(!personalData.raids) personalData.raids = [];
       const idx = personalData.raids.findIndex(r=>r.date===date);
-      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, totalRaw: totalParsed.scoreRaw, totalNum: totalParsed.scoreNum, raid1Raw, raid1Num, raid2Raw, raid2Num};
+      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, totalRaw: totalParsed.scoreRaw, totalNum: totalParsed.scoreNum, raid1Raw, raid1Num};
       if(idx>=0) personalData.raids[idx] = rec; else personalData.raids.push(rec);
       await savePersonalData();
       showToast('討伐スコアを保存しました');
