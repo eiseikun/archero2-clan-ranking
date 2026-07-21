@@ -260,7 +260,7 @@
   const WEEKDAYS = ['月','火','水','木','金','土','日'];
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
-  const DEFAULT_SETTINGS = {password:'neko222', clanName:'', members:[], clans:[], homeClan:'', visibility:{}, nameHistory:{internal:{}, cross:{}}};
+  const DEFAULT_SETTINGS = {password:'neko222', clanName:'', members:[], clans:[], homeClan:'', visibility:{}, nameHistory:{internal:{}, cross:{}}, ownerMemberName:'えいせい'};
   const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
   const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
@@ -368,6 +368,22 @@
   async function savePersonalData(){
     try{ await setDoc(personalRef, personalData); }
     catch(e){ console.error(e); showToast('保存に失敗しました'); }
+  }
+  // When the clan-internal record being saved belongs to the site owner
+  // (settings.ownerMemberName), mirror the daily total into the private
+  // personal raid log too, so it doesn't have to be entered twice. Any
+  // raid1 breakdown already stored personally is left untouched.
+  async function syncToPersonalIfOwner(scope, name, date, scoreRaw, scoreNum){
+    if(scope!=='internal' || !settings.ownerMemberName || name!==settings.ownerMemberName) return;
+    if(scoreNum==null) return;
+    if(!personalData.raids) personalData.raids = [];
+    const idx = personalData.raids.findIndex(r=>r.date===date);
+    if(idx>=0){
+      personalData.raids[idx] = {...personalData.raids[idx], totalRaw: scoreRaw, totalNum: scoreNum};
+    } else {
+      personalData.raids.push({id: uid(), date, totalRaw: scoreRaw, totalNum: scoreNum, raid1Raw:'', raid1Num:null});
+    }
+    await savePersonalData();
   }
 
 
@@ -1403,6 +1419,13 @@
             <button class="mi-btn" data-action="savePassword">変更</button>
           </div>
         </div>
+        <div class="mi-field">
+          <label class="mi-label">自分のクラン内メンバー名（この名前の記録は個人記録にも自動で反映されます）</label>
+          <div class="mi-row2">
+            <input class="mi-input" id="mi-owner-name" placeholder="例：えいせい" value="${esc(settings.ownerMemberName||'')}">
+            <button class="mi-btn" data-action="saveOwnerName">保存</button>
+          </div>
+        </div>
       `)}
 
       ${collapsiblePanel('roster', `👥 ${lbl.panel}`, `
@@ -1962,6 +1985,14 @@
       showToast('パスワードを変更しました');
       return;
     }
+    if(action==='saveOwnerName'){
+      const input = document.getElementById('mi-owner-name');
+      const name = input ? input.value.trim() : '';
+      settings.ownerMemberName = name;
+      await saveSettings();
+      showToast('保存しました');
+      return;
+    }
 
     if(action==='addName'){
       const input = document.getElementById('mi-new-name');
@@ -2117,6 +2148,7 @@
       let arr = getEntries(scope);
       const seen = new Set();
       let saved = 0, skippedDup = 0;
+      let ownerSync = null;
       for(let rank=1; rank<=15; rank++){
         const sel = document.querySelector(`[data-rank-select="${rank}"]`);
         const scoreInp = document.querySelector(`[data-rank-score="${rank}"]`);
@@ -2138,13 +2170,16 @@
             scoreRaw: scoreRaw!=='' ? scoreRaw : prev.scoreRaw,
             scoreNum: scoreNum!==null ? scoreNum : prev.scoreNum
           };
+          if(name===settings.ownerMemberName) ownerSync = arr[idx];
         } else {
           arr.push({id: uid(), date, name, rank, scoreRaw, scoreNum});
+          if(name===settings.ownerMemberName) ownerSync = arr[arr.length-1];
         }
         saved++;
       }
       setEntries(scope, arr);
       await persistEntries(scope);
+      if(ownerSync) await syncToPersonalIfOwner(scope, ownerSync.name, ownerSync.date, ownerSync.scoreRaw, ownerSync.scoreNum);
       showToast(skippedDup ? `${saved}件登録（同じ人が複数の順位に選ばれていたため${skippedDup}件スキップ）` : `${saved}件登録しました`);
       return;
     }
@@ -2159,21 +2194,27 @@
       let arr = getEntries(scope);
       const newNames = new Set();
       let saved = 0;
+      let ownerSync = null;
       rows.forEach(row=>{
         const name = row.name.trim();
         if(!name) return;
         const {scoreRaw, scoreNum} = parseImportedScore(row.scoreRaw, scope);
         const idx = arr.findIndex(e=>e.date===date && e.name===name);
+        let rec;
         if(idx>=0){
-          arr[idx] = {id: arr[idx].id, date, name, rank: row.rank, scoreRaw, scoreNum};
+          rec = {id: arr[idx].id, date, name, rank: row.rank, scoreRaw, scoreNum};
+          arr[idx] = rec;
         } else {
-          arr.push({id: uid(), date, name, rank: row.rank, scoreRaw, scoreNum});
+          rec = {id: uid(), date, name, rank: row.rank, scoreRaw, scoreNum};
+          arr.push(rec);
         }
+        if(name===settings.ownerMemberName) ownerSync = rec;
         newNames.add(name);
         saved++;
       });
       setEntries(scope, arr);
       await persistEntries(scope);
+      if(ownerSync) await syncToPersonalIfOwner(scope, ownerSync.name, ownerSync.date, ownerSync.scoreRaw, ownerSync.scoreNum);
 
       const key = scopeRosterKey(scope);
       if(!settings[key]) settings[key] = [];
@@ -2203,6 +2244,13 @@
         const {arr, added, updated, skipped, newNames} = importRowsToEntries(parsed.data, headerMap, existing, scope);
         setEntries(scope, arr);
         await persistEntries(scope);
+
+        if(scope==='internal' && settings.ownerMemberName){
+          const ownerEntries = arr.filter(e=>e.name===settings.ownerMemberName);
+          for(const oe of ownerEntries){
+            await syncToPersonalIfOwner(scope, oe.name, oe.date, oe.scoreRaw, oe.scoreNum);
+          }
+        }
 
         const key = scopeRosterKey(scope);
         if(!settings[key]) settings[key] = [];
