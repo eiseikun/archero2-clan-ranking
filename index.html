@@ -272,7 +272,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false, loadedPersonal = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'manual', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'paste', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
