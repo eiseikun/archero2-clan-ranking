@@ -999,8 +999,8 @@
       const scoreDisplay = rec ? formatScoreForScope(rec.scoreNum, scope) : '';
       return `<tr>
         <td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(d)}</td>
-        <td>${rankCell}</td>
-        <td style="font-family:'JetBrains Mono',monospace;">${scoreDisplay ? esc(scoreDisplay) : 'ー'}</td>
+        <td style="text-align:center;">${rankCell}</td>
+        <td style="font-family:'JetBrains Mono',monospace;text-align:center;">${scoreDisplay ? esc(scoreDisplay) : 'ー'}</td>
       </tr>`;
     }).join('');
     const formerNames = (settings.nameHistory && settings.nameHistory[scope] && settings.nameHistory[scope][name]) || [];
@@ -1017,7 +1017,7 @@
           </div>
           <div class="mi-scroll-x">
           <table class="mi-table">
-            <thead><tr><th>日付</th><th>順位</th><th>スコア</th></tr></thead>
+            <thead><tr><th>日付</th><th style="text-align:center;">順位</th><th style="text-align:center;">スコア</th></tr></thead>
             <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:var(--text-faint);padding:20px 0;">データがありません</td></tr>`}</tbody>
           </table>
           </div>
