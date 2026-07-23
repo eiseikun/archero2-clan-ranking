@@ -1639,17 +1639,17 @@
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">🗡 討伐スコアを記録</div>
-        <div class="mi-note" style="margin-top:0;">2討伐合計は必須、討伐1は任意です。</div>
+        <div class="mi-note" style="margin-top:0;">2討伐合計・討伐1はどちらか片方だけの入力でも登録できます（後からもう一方を追加できます）。</div>
         <div class="mi-field">
           <label class="mi-label">日付</label>
           ${renderSingleDatePicker(sd, raidDate, 'personalRaidDate')}
         </div>
         <div class="mi-field">
-          <label class="mi-label">2討伐合計（必須）</label>
+          <label class="mi-label">2討伐合計</label>
           <input class="mi-input" id="mi-personal-total" placeholder="例：25.6T" value="${existingRaid&&existingRaid.totalRaw?esc(existingRaid.totalRaw):''}">
         </div>
         <div class="mi-field">
-          <label class="mi-label">討伐1（任意）</label>
+          <label class="mi-label">討伐1</label>
           <input class="mi-input" id="mi-personal-raid1" placeholder="例：12.5T" value="${existingRaid&&existingRaid.raid1Raw?esc(existingRaid.raid1Raw):''}">
         </div>
         <button class="mi-btn mi-btn-gold" data-action="savePersonalRaid">保存</button>
@@ -1903,17 +1903,28 @@
       const r1Input = document.getElementById('mi-personal-raid1');
       const totalRawInput = totalInput ? totalInput.value.trim() : '';
       const raid1RawInput = r1Input ? r1Input.value.trim() : '';
-      if(!totalRawInput){ showToast('2討伐合計を入力してください'); return; }
-      const totalParsed = parseImportedScore(totalRawInput, 'internal');
-      if(totalParsed.scoreNum==null){ showToast('2討伐合計の形式を確認してください'); return; }
-      let raid1Raw='', raid1Num=null;
+      if(!personalData.raids) personalData.raids = [];
+      const idx = personalData.raids.findIndex(r=>r.date===date);
+      const existing = idx>=0 ? personalData.raids[idx] : null;
+
+      let totalRaw = existing ? existing.totalRaw : '';
+      let totalNum = existing ? existing.totalNum : null;
+      if(totalRawInput){
+        const totalParsed = parseImportedScore(totalRawInput, 'internal');
+        if(totalParsed.scoreNum==null){ showToast('2討伐合計の形式を確認してください'); return; }
+        totalRaw = totalParsed.scoreRaw; totalNum = totalParsed.scoreNum;
+      }
+
+      let raid1Raw = existing ? existing.raid1Raw : '';
+      let raid1Num = existing ? existing.raid1Num : null;
       if(raid1RawInput){
         const p = parseImportedScore(raid1RawInput, 'internal');
         if(p.scoreNum!=null){ raid1Raw = p.scoreRaw; raid1Num = p.scoreNum; }
       }
-      if(!personalData.raids) personalData.raids = [];
-      const idx = personalData.raids.findIndex(r=>r.date===date);
-      const rec = {id: idx>=0 ? personalData.raids[idx].id : uid(), date, totalRaw: totalParsed.scoreRaw, totalNum: totalParsed.scoreNum, raid1Raw, raid1Num};
+
+      if(totalNum==null && raid1Num==null){ showToast('2討伐合計または討伐1のどちらかを入力してください'); return; }
+
+      const rec = {id: existing ? existing.id : uid(), date, totalRaw, totalNum, raid1Raw, raid1Num};
       if(idx>=0) personalData.raids[idx] = rec; else personalData.raids.push(rec);
       await savePersonalData();
       showToast('討伐スコアを保存しました');
