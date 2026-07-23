@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -993,7 +992,7 @@
   // ---------- history modal (date x rank detail for a tapped name) ----------
   function renderModal(){
     const {scope, name} = state.modal;
-    const dates = [...new Set(getEntries(scope).filter(e=>e.name===name).map(e=>e.date))].sort().reverse();
+    const dates = [...new Set(getEntries(scope).map(e=>e.date))].sort().reverse();
     const rows = dates.map(d=>{
       const rec = getRankedListForDate(scope, d).find(e=>e.name===name);
       const rankCell = rec && rec.displayRank!=null ? rankBadge(rec.displayRank) : 'ー';
