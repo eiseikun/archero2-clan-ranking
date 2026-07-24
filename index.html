@@ -289,6 +289,9 @@
     personalTab:'log', // 'log' | 'table' | 'graph'
     personalGraphMetric:'total', // 'total' | 'each'
     personalGraphWeekdays:[], // empty = all weekdays
+    personalGraphRangeStart:null,
+    personalGraphRangeEnd:null,
+    personalCal:{calOpenField:null, calViewMonth:null},
     collapse:{},
     modal:null, // {scope, name} | null
     scopeData:{ internal: freshScoped(), cross: freshScoped() }
@@ -1724,11 +1727,10 @@
   }
 
   function renderPersonalGraph(){
-    const sd = scopedState();
     const raids = personalData.raids || [];
     const allDatesAsc = [...new Set(raids.map(r=>r.date))].sort();
-    const start = sd.personalGraphRangeStart || (allDatesAsc[0]||todayStr());
-    const end = sd.personalGraphRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
+    const start = state.personalGraphRangeStart || (allDatesAsc[0]||todayStr());
+    const end = state.personalGraphRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
     const weekdays = state.personalGraphWeekdays;
 
     const dates = allDatesAsc.filter(d=>
@@ -1754,7 +1756,7 @@
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">期間</div>
-        ${renderDateRangePicker(sd, start, end, 'personalGraphRange')}
+        ${renderDateRangePicker(state.personalCal, start, end, 'personalGraphRange')}
 
         <div class="mi-panel-title" style="margin-top:14px;">曜日で絞り込み（複数選択可・未選択なら全曜日）</div>
         <div class="mi-pillrow" id="mi-personal-weekday-pillrow" data-preserve-scroll>
@@ -1799,30 +1801,48 @@
     if(action==='closeModal'){ state.modal = null; render(); return; }
 
     if(action==='openCal'){
-      // val is like "table:start" / "graph:end" / "bulkDate:single"
-      if(sd.calOpenField===val){
-        sd.calOpenField = null;
+      // val is like "table:start" / "graph:end" / "bulkDate:single" / "personalGraphRange:start"
+      const [target, field] = val.split(':');
+      const store = target==='personalGraphRange' ? state.personalCal : sd;
+      if(store.calOpenField===val){
+        store.calOpenField = null;
       } else {
-        sd.calOpenField = val;
-        const [target, field] = val.split(':');
-        const current = field==='single' ? sd[target] : sd[`${target}Range${field==='start'?'Start':'End'}`];
-        sd.calViewMonth = monthOf(current);
+        store.calOpenField = val;
+        const current = field==='single'
+          ? (target==='personalGraphRange' ? state[target] : sd[target])
+          : (target==='personalGraphRange'
+              ? (field==='start' ? state.personalGraphRangeStart : state.personalGraphRangeEnd)
+              : sd[`${target}Range${field==='start'?'Start':'End'}`]);
+        store.calViewMonth = monthOf(current);
       }
       render(); return;
     }
     if(action==='calPrevMonth'){
-      sd.calViewMonth = shiftMonth(sd.calViewMonth || monthOf(null), -1);
+      const store = (state.personalCal.calOpenField) ? state.personalCal : sd;
+      store.calViewMonth = shiftMonth(store.calViewMonth || monthOf(null), -1);
       render(); return;
     }
     if(action==='calNextMonth'){
-      sd.calViewMonth = shiftMonth(sd.calViewMonth || monthOf(null), 1);
+      const store = (state.personalCal.calOpenField) ? state.personalCal : sd;
+      store.calViewMonth = shiftMonth(store.calViewMonth || monthOf(null), 1);
       render(); return;
     }
     if(action==='pickCalDate'){
-      if(sd.calOpenField){
-        const [target, field] = sd.calOpenField.split(':');
+      const pcStore = state.personalCal;
+      const store = pcStore.calOpenField ? pcStore : sd;
+      if(store.calOpenField){
+        const [target, field] = store.calOpenField.split(':');
         if(field==='single'){
-          sd[target] = val;
+          if(target==='personalGraphRange'){ /* n/a, no single personal field */ }
+          else sd[target] = val;
+        } else if(target==='personalGraphRange'){
+          if(field==='start'){
+            state.personalGraphRangeStart = val;
+            if(state.personalGraphRangeEnd && val>state.personalGraphRangeEnd) state.personalGraphRangeEnd = val;
+          } else {
+            state.personalGraphRangeEnd = val;
+            if(state.personalGraphRangeStart && val<state.personalGraphRangeStart) state.personalGraphRangeStart = val;
+          }
         } else {
           const startKey = `${target}RangeStart`, endKey = `${target}RangeEnd`;
           if(field==='start'){
@@ -1834,7 +1854,7 @@
           }
         }
       }
-      sd.calOpenField = null;
+      store.calOpenField = null;
       render(); return;
     }
     if(action==='manageSort'){
