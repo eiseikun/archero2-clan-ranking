@@ -291,6 +291,7 @@
     personalGraphWeekdays:[], // empty = all weekdays
     personalGraphRangeStart:null,
     personalGraphRangeEnd:null,
+    personalRaidDate:null,
     personalCal:{calOpenField:null, calViewMonth:null},
     collapse:{},
     modal:null, // {scope, name} | null
@@ -761,9 +762,11 @@
       const date = parseDateFlexible(row[dateCol]);
       if(!date) return;
       const totalRawInput = String(row[scoreCol]==null?'':row[scoreCol]).trim();
-      if(!totalRawInput) return; // total is required
-      const totalParsed = parseImportedScore(totalRawInput, 'internal');
-      if(totalParsed.scoreNum==null) return;
+      let totalRaw='', totalNum=null;
+      if(totalRawInput){
+        const totalParsed = parseImportedScore(totalRawInput, 'internal');
+        if(totalParsed.scoreNum!=null){ totalRaw = totalParsed.scoreRaw; totalNum = totalParsed.scoreNum; }
+      }
       let raid1Raw='', raid1Num=null;
       if(score1Col){
         const r1 = String(row[score1Col]==null?'':row[score1Col]).trim();
@@ -772,7 +775,8 @@
           if(p.scoreNum!=null){ raid1Raw = p.scoreRaw; raid1Num = p.scoreNum; }
         }
       }
-      rows.push({date, totalRaw: totalParsed.scoreRaw, totalNum: totalParsed.scoreNum, raid1Raw, raid1Num});
+      if(totalNum==null && raid1Num==null) return; // どちらも値が無ければスキップ
+      rows.push({date, totalRaw, totalNum, raid1Raw, raid1Num});
     });
     return {rows};
   }
@@ -1622,8 +1626,7 @@
   }
 
   function renderPersonalLog(){
-    const sd = scopedState();
-    const raidDate = sd.personalRaidDate || yesterdayStr();
+    const raidDate = state.personalRaidDate || yesterdayStr();
     const existingRaid = (personalData.raids||[]).find(r=>r.date===raidDate);
 
     const raids = [...(personalData.raids||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
@@ -1645,7 +1648,7 @@
         <div class="mi-note" style="margin-top:0;">2討伐合計・討伐1はどちらか片方だけの入力でも登録できます（後からもう一方を追加できます）。</div>
         <div class="mi-field">
           <label class="mi-label">日付</label>
-          ${renderSingleDatePicker(sd, raidDate, 'personalRaidDate')}
+          ${renderSingleDatePicker(state.personalCal, raidDate, 'personalRaidDate')}
         </div>
         <div class="mi-field">
           <label class="mi-label">2討伐合計</label>
@@ -1666,7 +1669,7 @@
       <div class="mi-panel">
         <div class="mi-panel-title">📥 CSVインポート</div>
         <div class="mi-note" style="margin-top:0;margin-bottom:10px;">
-          <code>date,score,score1</code> の形式（score=2討伐合計・必須、score1=討伐1・任意）で読み込みます。数字だけならB単位として扱い、1000を超えたら自動でT表記にします。同じ日付のデータが既にある場合は上書きします。
+          <code>date,score,score1</code> の形式（score=2討伐合計、score1=討伐1）で読み込みます。どちらか片方だけでも取り込めます。数字だけならB単位として扱い、1000を超えたら自動でT表記にします。同じ日付のデータが既にある場合は上書きします。
         </div>
         <div class="mi-row2">
           <input class="mi-input" type="file" id="mi-personal-csv-file" accept=".csv">
@@ -1801,15 +1804,16 @@
     if(action==='closeModal'){ state.modal = null; render(); return; }
 
     if(action==='openCal'){
-      // val is like "table:start" / "graph:end" / "bulkDate:single" / "personalGraphRange:start"
+      // val is like "table:start" / "graph:end" / "bulkDate:single" / "personalGraphRange:start" / "personalRaidDate:single"
       const [target, field] = val.split(':');
-      const store = target==='personalGraphRange' ? state.personalCal : sd;
+      const isPersonal = target==='personalGraphRange' || target==='personalRaidDate';
+      const store = isPersonal ? state.personalCal : sd;
       if(store.calOpenField===val){
         store.calOpenField = null;
       } else {
         store.calOpenField = val;
         const current = field==='single'
-          ? (target==='personalGraphRange' ? state[target] : sd[target])
+          ? (target==='personalRaidDate' ? state.personalRaidDate : sd[target])
           : (target==='personalGraphRange'
               ? (field==='start' ? state.personalGraphRangeStart : state.personalGraphRangeEnd)
               : sd[`${target}Range${field==='start'?'Start':'End'}`]);
@@ -1833,7 +1837,7 @@
       if(store.calOpenField){
         const [target, field] = store.calOpenField.split(':');
         if(field==='single'){
-          if(target==='personalGraphRange'){ /* n/a, no single personal field */ }
+          if(target==='personalRaidDate') state.personalRaidDate = val;
           else sd[target] = val;
         } else if(target==='personalGraphRange'){
           if(field==='start'){
@@ -1918,7 +1922,7 @@
     if(action==='personalGraphMetric'){ state.personalGraphMetric = val; render(); return; }
 
     if(action==='savePersonalRaid'){
-      const date = sd.personalRaidDate || yesterdayStr();
+      const date = state.personalRaidDate || yesterdayStr();
       const totalInput = document.getElementById('mi-personal-total');
       const r1Input = document.getElementById('mi-personal-raid1');
       const totalRawInput = totalInput ? totalInput.value.trim() : '';
