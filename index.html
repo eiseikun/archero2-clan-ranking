@@ -414,7 +414,18 @@
     return vis.includes(name);
   }
   function getVisibleRoster(scope){
-    return scopeAllKnown(scope).filter(n=>isNameVisible(scope, n));
+    // Once an explicit roster has been set up (settings.members / settings.clans),
+    // use ONLY that list for candidate dropdowns (registration, graph, ranking).
+    // Otherwise a name that only ever appears in raw entries — e.g. a clan name
+    // pasted into the wrong tab by mistake, or someone removed from the roster
+    // but with old score history — would keep reappearing as a selectable
+    // candidate forever, with no way to get rid of it from the roster panel
+    // (since it was never actually in the roster list to begin with).
+    // Fall back to the entries-derived list only when no roster has been
+    // configured yet, to preserve behavior for brand-new/legacy data.
+    const explicit = settings[scopeRosterKey(scope)] || [];
+    const base = explicit.length ? explicit : scopeAllKnown(scope);
+    return base.filter(n=>isNameVisible(scope, n));
   }
   function scopeLabel(scope){ return scope==='internal' ? {title:'メンバー', add:'メンバー名', panel:'メンバー管理'} : {title:'クラン', add:'クラン名', panel:'クラン管理'}; }
   function scopedState(){ return state.scopeData[state.scope]; }
