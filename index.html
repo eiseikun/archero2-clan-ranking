@@ -701,10 +701,25 @@
       reader.readAsText(file, 'UTF-8');
     });
   }
+  // 同じ日付・同じ順位に別人の古いレコードが残らないように、今回登録
+  // した順位と一致するが名前が異なる既存レコードは順位をクリアする
+  // （順位を間違えて登録 → 後から名前を修正、というケースの重複防止）
+  // rankByDate: Map<date, Map<rank, name>>
+  function clearStaleRanks(arr, rankByDate){
+    return arr.map(e=>{
+      const rankToName = rankByDate.get(e.date);
+      if(rankToName && e.rank!=null && rankToName.has(e.rank) && rankToName.get(e.rank)!==e.name){
+        return {...e, rank: null};
+      }
+      return e;
+    });
+  }
+
   function importRowsToEntries(rows, headerMap, existingArr, scope){
     let arr = [...existingArr];
     let added=0, updated=0, skipped=0;
     const newNames = new Set();
+    const rankByDate = new Map();
     rows.forEach(row=>{
       const date = headerMap.date ? parseDateFlexible(row[headerMap.date]) : null;
       const name = headerMap.name ? String(row[headerMap.name]||'').trim() : '';
@@ -713,21 +728,29 @@
       const rank = headerMap.rank ? parseImportedRank(row[headerMap.rank]) : null;
       if(scoreNum===null && rank===null){ skipped++; return; }
       const idx = arr.findIndex(e=>e.date===date && e.name===name);
+      let finalRank;
       if(idx>=0){
         const prev = arr[idx];
+        finalRank = rank!==null ? rank : (prev.rank!=null ? prev.rank : null);
         arr[idx] = {
           id: prev.id, date, name,
           scoreRaw: scoreRaw!=='' ? scoreRaw : prev.scoreRaw,
           scoreNum: scoreNum!==null ? scoreNum : prev.scoreNum,
-          rank: rank!==null ? rank : (prev.rank!=null ? prev.rank : null)
+          rank: finalRank
         };
         updated++;
       } else {
+        finalRank = rank;
         arr.push({id: uid(), date, name, scoreRaw, scoreNum: scoreNum===null?null:scoreNum, rank});
         added++;
       }
+      if(finalRank!=null){
+        if(!rankByDate.has(date)) rankByDate.set(date, new Map());
+        rankByDate.get(date).set(finalRank, name);
+      }
       newNames.add(name);
     });
+    arr = clearStaleRanks(arr, rankByDate);
     return {arr, added, updated, skipped, newNames};
   }
   function entriesToCsv(entries, lbl, scope){
@@ -2217,6 +2240,7 @@
       if(!date){ showToast('日付を選択してください'); return; }
       let arr = getEntries(scope);
       const seen = new Set();
+      const rankToName = new Map();
       let saved = 0, skippedDup = 0;
       let ownerSync = null;
       for(let rank=1; rank<=15; rank++){
@@ -2226,6 +2250,7 @@
         if(!name) continue;
         if(seen.has(name)){ skippedDup++; continue; }
         seen.add(name);
+        rankToName.set(rank, name);
         const rawScore = scoreInp ? scoreInp.value.trim() : '';
         let scoreRaw = '', scoreNum = null;
         if(rawScore){
@@ -2247,6 +2272,7 @@
         }
         saved++;
       }
+      arr = clearStaleRanks(arr, new Map([[date, rankToName]]));
       setEntries(scope, arr);
       await persistEntries(scope);
       if(ownerSync) await syncToPersonalIfOwner(scope, ownerSync.name, ownerSync.date, ownerSync.scoreRaw, ownerSync.scoreNum);
@@ -2263,12 +2289,14 @@
 
       let arr = getEntries(scope);
       const newNames = new Set();
+      const rankToName = new Map();
       let saved = 0;
       let ownerSync = null;
       rows.forEach(row=>{
         const name = row.name.trim();
         if(!name) return;
         const {scoreRaw, scoreNum} = parseImportedScore(row.scoreRaw, scope);
+        if(row.rank!=null) rankToName.set(row.rank, name);
         const idx = arr.findIndex(e=>e.date===date && e.name===name);
         let rec;
         if(idx>=0){
@@ -2282,6 +2310,7 @@
         newNames.add(name);
         saved++;
       });
+      arr = clearStaleRanks(arr, new Map([[date, rankToName]]));
       setEntries(scope, arr);
       await persistEntries(scope);
       if(ownerSync) await syncToPersonalIfOwner(scope, ownerSync.name, ownerSync.date, ownerSync.scoreRaw, ownerSync.scoreNum);
