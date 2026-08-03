@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -293,6 +292,7 @@
     personalGraphRangeStart:null,
     personalGraphRangeEnd:null,
     personalRaidDate:null,
+    personalRaidSort:'date_desc', // 'date_desc' | 'date_asc' | 'score_desc' | 'score_asc'
     personalCal:{calOpenField:null, calViewMonth:null},
     collapse:{},
     modal:null, // {scope, name} | null
@@ -1700,7 +1700,25 @@
     const raidDate = state.personalRaidDate || yesterdayStr();
     const existingRaid = (personalData.raids||[]).find(r=>r.date===raidDate);
 
-    const raids = [...(personalData.raids||[])].sort((a,b)=> a.date<b.date?1:(a.date>b.date?-1:0));
+    const raidSort = state.personalRaidSort || 'date_desc';
+    const raidScoreOf = r => r.totalNum!=null ? r.totalNum : (r.raid1Num!=null ? r.raid1Num : -Infinity);
+    const raidSorters = {
+      date_desc: (a,b)=> a.date<b.date?1:(a.date>b.date?-1:0),
+      date_asc: (a,b)=> a.date<b.date?-1:(a.date>b.date?1:0),
+      score_desc: (a,b)=> raidScoreOf(b)-raidScoreOf(a) || (a.date<b.date?1:(a.date>b.date?-1:0)),
+      score_asc: (a,b)=> raidScoreOf(a)-raidScoreOf(b) || (a.date<b.date?1:(a.date>b.date?-1:0)),
+    };
+    const raids = [...(personalData.raids||[])].sort(raidSorters[raidSort] || raidSorters.date_desc);
+    const raidSortOptions = [
+      {val:'date_desc', label:'日付が新しい順'},
+      {val:'date_asc', label:'日付が古い順'},
+      {val:'score_desc', label:'スコアが高い順'},
+      {val:'score_asc', label:'スコアが低い順'},
+    ];
+    const raidSortControl = `
+      <div class="mi-pillrow" style="margin-bottom:10px;">
+        ${raidSortOptions.map(o=>`<div class="mi-pill ${raidSort===o.val?'active':''}" data-action="personalRaidSort" data-val="${o.val}">${o.label}</div>`).join('')}
+      </div>`;
     const raidRows = raids.length ? raids.map(r=>`
       <div class="mi-roster-row">
         <span class="mi-roster-name" style="flex-direction:column;align-items:flex-start;display:flex;">
@@ -1734,6 +1752,7 @@
 
       <div class="mi-panel">
         <div class="mi-panel-title">🗡 討伐スコア履歴</div>
+        ${raids.length ? raidSortControl : ''}
         ${raidRows}
       </div>
 
@@ -1984,6 +2003,7 @@
     }
     if(action==='personalLogout'){ state.personalLoggedIn = false; render(); return; }
     if(action==='personalTab'){ state.personalTab = val; render(); return; }
+    if(action==='personalRaidSort'){ state.personalRaidSort = val; render(); return; }
     if(action==='personalGraphWeekday'){
       state.personalGraphWeekdays = state.personalGraphWeekdays.includes(val)
         ? state.personalGraphWeekdays.filter(w=>w!==val)
