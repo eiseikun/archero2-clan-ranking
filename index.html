@@ -233,7 +233,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import {
-    getFirestore, doc, setDoc, onSnapshot
+    getFirestore, doc, setDoc, deleteDoc, getDoc, getDocs, collection, onSnapshot
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   // TODO: replace with your own Firebase project config if you fork this
@@ -248,10 +248,16 @@
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
 
-  // All shared data lives under a single collection "clanRanking" as 3 documents.
+  // All shared data lives under a single collection "clanRanking".
+  // Entries (member/clan) used to live as one big array in a single document,
+  // but that runs into Firestore's 1MB-per-document ceiling as clan count and
+  // history grow. They're now sharded by month ("YYYY-MM") into subcollections,
+  // so each document only ever holds one month's worth of entries.
   const COLLECTION = 'clanRanking';
-  const memberEntriesRef = doc(db, COLLECTION, 'memberEntries');
-  const clanEntriesRef   = doc(db, COLLECTION, 'clanEntries');
+  const memberEntriesLegacyRef = doc(db, COLLECTION, 'memberEntries'); // pre-sharding storage, kept only for one-time migration
+  const clanEntriesLegacyRef   = doc(db, COLLECTION, 'clanEntries');   // pre-sharding storage, kept only for one-time migration
+  const memberMonthsCol = collection(db, COLLECTION, 'memberEntries', 'months');
+  const clanMonthsCol   = collection(db, COLLECTION, 'clanEntries', 'months');
   const settingsRef      = doc(db, COLLECTION, 'settings');
   const personalRef      = doc(db, COLLECTION, 'personal');
 
@@ -265,6 +271,8 @@
 
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
   let clanEntries = [];   // {id,date,name,scoreRaw,scoreNum}
+  let memberKnownMonths = new Set(); // which "YYYY-MM" shard docs currently exist in Firestore
+  let clanKnownMonths = new Set();
   let settings = {...DEFAULT_SETTINGS};
   let personalData = {password:'private123', list:[], raids:[]}; // raids: {id,date,totalRaw,totalNum,raid1Raw,raid1Num}
   let toastMsg = null;
@@ -327,19 +335,73 @@
     });
   }
 
+  // Which "YYYY-MM" shard a given entry's date belongs to. Entries with a
+  // missing/malformed date (shouldn't normally happen) fall into a catch-all
+  // bucket so they're never silently dropped.
+  function monthKeyOf(dateStr){
+    return (dateStr && dateStr.length>=7) ? dateStr.slice(0,7) : '不明';
+  }
+  function groupEntriesByMonth(list){
+    const map = new Map();
+    (list||[]).forEach(e=>{
+      const key = monthKeyOf(e.date);
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
+    });
+    return map;
+  }
+
+  // One-time migration: if old-style single-document data exists and no
+  // monthly shards have been written yet, split it into monthly shards and
+  // clear the legacy document. Safe to call every load — it's a no-op once
+  // migrated. If two clients happen to race on this, they just re-write the
+  // same monthly data, which is harmless.
+  async function migrateLegacyIfNeeded(legacyRef, monthsCol, label){
+    try{
+      const legacySnap = await getDoc(legacyRef);
+      if(!legacySnap.exists()) return;
+      const legacyData = legacySnap.data();
+      const legacyList = legacyData.list;
+      if(!legacyList || !legacyList.length) return;
+      const existingMonths = await getDocs(monthsCol);
+      if(!existingMonths.empty) return; // already sharded
+      const grouped = groupEntriesByMonth(legacyList);
+      for(const [monthKey, entries] of grouped){
+        await setDoc(doc(monthsCol, monthKey), {list: entries, updatedAt: legacyData.updatedAt || todayStr()});
+      }
+      await setDoc(legacyRef, {list: [], migratedAt: todayStr()});
+    }catch(e){ console.error(`${label} migration failed`, e); }
+  }
+
   function startListeners(){
-    onSnapshot(memberEntriesRef, snap=>{
-      const data = snap.exists() ? snap.data() : {};
-      memberEntries = normalizeEntries(data.list, ['member','clan']);
-      memberUpdatedAt = data.updatedAt || null;
+    onSnapshot(memberMonthsCol, snap=>{
+      let merged = [], latestUpdatedAt = null;
+      const monthKeys = new Set();
+      snap.forEach(d=>{
+        monthKeys.add(d.id);
+        const data = d.data();
+        merged = merged.concat(normalizeEntries(data.list, ['member','clan']));
+        if(data.updatedAt && (!latestUpdatedAt || data.updatedAt>latestUpdatedAt)) latestUpdatedAt = data.updatedAt;
+      });
+      memberEntries = merged;
+      memberKnownMonths = monthKeys;
+      memberUpdatedAt = latestUpdatedAt;
       loadedMembers = true;
       render();
     }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
 
-    onSnapshot(clanEntriesRef, snap=>{
-      const data = snap.exists() ? snap.data() : {};
-      clanEntries = normalizeEntries(data.list, ['clan']);
-      clanUpdatedAt = data.updatedAt || null;
+    onSnapshot(clanMonthsCol, snap=>{
+      let merged = [], latestUpdatedAt = null;
+      const monthKeys = new Set();
+      snap.forEach(d=>{
+        monthKeys.add(d.id);
+        const data = d.data();
+        merged = merged.concat(normalizeEntries(data.list, ['clan']));
+        if(data.updatedAt && (!latestUpdatedAt || data.updatedAt>latestUpdatedAt)) latestUpdatedAt = data.updatedAt;
+      });
+      clanEntries = merged;
+      clanKnownMonths = monthKeys;
+      clanUpdatedAt = latestUpdatedAt;
       loadedClans = true;
       render();
     }, err=>{ console.error(err); showToast('データ取得に失敗しました'); });
@@ -355,16 +417,33 @@
       loadedPersonal = true;
       render();
     }, err=>{ console.error(err); showToast('個人記録の取得に失敗しました'); });
+
+    migrateLegacyIfNeeded(memberEntriesLegacyRef, memberMonthsCol, 'memberEntries');
+    migrateLegacyIfNeeded(clanEntriesLegacyRef, clanMonthsCol, 'clanEntries');
   }
 
-  async function saveMemberEntries(){
-    try{ await setDoc(memberEntriesRef, {list: memberEntries, updatedAt: todayStr()}); }
-    catch(e){ console.error(e); showToast('保存に失敗しました'); }
+  // Writes the current in-memory entry list back to Firestore as one
+  // document per month ("YYYY-MM"), instead of one giant document. Any
+  // month that no longer has entries (e.g. after a bulk delete) has its
+  // shard document removed so stale empty docs don't pile up.
+  async function saveMonthlyEntries(monthsCol, knownMonths, list){
+    try{
+      const grouped = groupEntriesByMonth(list);
+      const newKeys = new Set(grouped.keys());
+      const writes = [];
+      for(const [monthKey, entries] of grouped){
+        writes.push(setDoc(doc(monthsCol, monthKey), {list: entries, updatedAt: todayStr()}));
+      }
+      for(const oldKey of knownMonths){
+        if(!newKeys.has(oldKey)) writes.push(deleteDoc(doc(monthsCol, oldKey)));
+      }
+      await Promise.all(writes);
+      knownMonths.clear();
+      newKeys.forEach(k=>knownMonths.add(k));
+    }catch(e){ console.error(e); showToast('保存に失敗しました'); }
   }
-  async function saveClanEntries(){
-    try{ await setDoc(clanEntriesRef, {list: clanEntries, updatedAt: todayStr()}); }
-    catch(e){ console.error(e); showToast('保存に失敗しました'); }
-  }
+  async function saveMemberEntries(){ return saveMonthlyEntries(memberMonthsCol, memberKnownMonths, memberEntries); }
+  async function saveClanEntries(){ return saveMonthlyEntries(clanMonthsCol, clanKnownMonths, clanEntries); }
   async function saveSettings(){
     try{ await setDoc(settingsRef, settings); }
     catch(e){ console.error(e); showToast('保存に失敗しました'); }
@@ -1403,7 +1482,7 @@
   function renderBestScoreTable(){
     const scope = 'internal';
     const entries = getEntries(scope);
-    const roster = scopeAllKnown(scope);
+    const roster = scopeRoster(scope); // current roster only — members removed from メンバー管理 shouldn't linger here
     let rows = roster.map(name=>{
       const own = entries.filter(e=>e.name===name && e.scoreNum!=null);
       if(!own.length) return null;
