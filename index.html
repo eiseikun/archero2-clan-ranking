@@ -665,16 +665,29 @@
   // to sorting by score for that date.
   function getRankedListForDate(scope, date){
     const dayEntries = getEntries(scope).filter(e=>e.date===date);
-    const hasRank = dayEntries.some(e=>e.rank!=null);
-    const list = hasRank
-      ? [...dayEntries].sort((a,b)=>{
-          const ar = a.rank==null ? Infinity : a.rank;
-          const br = b.rank==null ? Infinity : b.rank;
-          if(ar!==br) return ar-br;
-          return (b.scoreNum||0)-(a.scoreNum||0);
-        })
-      : [...dayEntries].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0));
-    return list.map((e,i)=>({...e, displayRank: e.rank!=null ? e.rank : (i+1)}));
+    const ranked = dayEntries.filter(e=>e.rank!=null);
+    if(!ranked.length){
+      // No explicit ranks at all for this date -> sort everyone by score.
+      const list = [...dayEntries].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0));
+      return list.map((e,i)=>({...e, displayRank: i+1}));
+    }
+    // Some entries have an explicit (e.g. CSV-imported) rank. Keep those
+    // entries in their given relative order (their rank source is trusted
+    // over score, since score can lose precision for very large numbers).
+    // Entries WITHOUT an explicit rank (e.g. a name that was deleted and
+    // re-registered via score-only registration) used to always sort to
+    // the bottom regardless of score. Instead, slot them into the ordered
+    // list based on where their score actually falls.
+    const unranked = dayEntries.filter(e=>e.rank==null);
+    const merged = [...ranked].sort((a,b)=>a.rank-b.rank);
+    [...unranked].sort((a,b)=>(b.scoreNum||0)-(a.scoreNum||0)).forEach(u=>{
+      let insertAt = merged.length;
+      for(let i=0;i<merged.length;i++){
+        if((u.scoreNum||0) > (merged[i].scoreNum||0)){ insertAt = i; break; }
+      }
+      merged.splice(insertAt, 0, u);
+    });
+    return merged.map((e,i)=>({...e, displayRank: i+1}));
   }
   function getRankForNameOnDate(scope, date, name){
     const rec = getRankedListForDate(scope, date).find(e=>e.name===name);
