@@ -266,7 +266,7 @@
   const BOSS_MAP = {'月':'墓守り','火':'ファイアドラゴン','水':'バルログ','木':'メデューサ','金':'ストーンマン','土':'一つ目の魔道士','日':'鎌の魔道士'};
   const LINE_COLORS = ['#45c4b0','#d4af37','#e0555a','#8f7fe8','#4fbf6a','#e08f45','#5aa9e6','#e6d55a'];
   const DEFAULT_SETTINGS = {password:'pass111', clanName:'', members:[], clans:[], homeClan:'', visibility:{}, nameHistory:{internal:{}, cross:{}}, ownerMemberName:'えいせい'};
-  const UNRANKED = 16; // 順位は毎日15位までしか記録していないため、ランク外は16位として扱う
+  const UNRANKED_MIN = 16; // 通常は15位までしか記録しないため、ランク外は16位として扱う（Tを超えた16位以降が記録されている日は、その次点まで繰り下げる）
   const PRESET_CLAN_ORDER = ['魔導特務隊','最狂会','IgnisFloris','ポケポケ会','PopoWarren','やまだ家','ねこ海賊団','たまねぎ班','アチャ伝','天狼の戦弓団','猫の旅'];
 
   let memberEntries = []; // {id,date,name,scoreRaw,scoreNum}
@@ -280,7 +280,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false, loadedPersonal = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'paste', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'paste', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null, manualExtraRows:0}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -1416,16 +1416,31 @@
     const end = sd.tableRangeEnd || (allDatesAsc[allDatesAsc.length-1]||todayStr());
     const activeDates = allDatesAsc.filter(d=> d>=start && d<=end);
 
+    // 日付ごとに「その日実際に記録された順位」と「ランク外時の扱い順位」を
+    // 事前計算する。通常は16位固定だが、Tを超えて16位以降まで記録されて
+    // いる日はその次の順位（記録された最下位+1）まで繰り下げる。
+    const dateRankInfo = {};
+    activeDates.forEach(d=>{
+      const list = getRankedListForDate(scope, d);
+      dateRankInfo[d] = {
+        nameToRank: new Map(list.map(e=>[e.name, e.displayRank])),
+        unranked: Math.max(UNRANKED_MIN, list.length + 1)
+      };
+    });
+
     const roster = scopeAllKnown(scope);
     let rows = roster.map(name=>{
       if(!activeDates.length) return null;
+      let everRanked = false;
       const ranks = activeDates.map(d=>{
-        const r = getRankForNameOnDate(scope, d, name);
-        return r==null ? UNRANKED : r;
+        const info = dateRankInfo[d];
+        if(info.nameToRank.has(name)){ everRanked = true; return info.nameToRank.get(name); }
+        return info.unranked;
       });
+      if(!everRanked) return null; // 一度も入れなかった人は表示しない
       const avg = ranks.reduce((a,b)=>a+b,0)/ranks.length;
       return {name, avg};
-    }).filter(r=> r && r.avg < UNRANKED - 1e-9);
+    }).filter(Boolean);
     rows.sort((a,b)=>a.avg-b.avg);
 
     const body = rows.length ? rows.map((r,i)=>`
@@ -1435,7 +1450,7 @@
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">📊 平均順位</div>
-        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">指定期間中、15位以内に入れなかった日は16位として平均を計算します（一度も入れなかった人は表示されません）。</div>
+        <div class="mi-note" style="margin-top:0;margin-bottom:10px;">指定期間中、その日記録された順位に入れなかった日は16位として平均を計算します。ただしTを超えて16位以降まで記録されている日は、その次の順位（例：18位まで記録がある日は19位）として計算します（一度も入れなかった人は表示されません）。</div>
         ${renderDateRangePicker(sd, start, end, 'table')}
         <div class="mi-scroll-x">
         <table class="mi-table">
@@ -1658,8 +1673,13 @@
           ${renderSingleDatePicker(sd, bulkDate, 'bulkDate')}
         </div>
         ${visibleRoster.length ? (scope==='internal' ? `
+          <div class="mi-note" style="margin-top:0;">通常は15位まででOKです。T（1000B）を超えた人が16位以降にいた場合のみ、下の「＋順位を追加」でその人数分だけ行を増やして記録してください。</div>
           <div>
-            ${(()=>{ const historyMap = buildRecentRankHistory(scope, 10); return Array.from({length:15}, (_,i)=>i+1).map(rank=>{
+            ${(()=>{
+              const maxStoredRank = entries.filter(e=>e.date===bulkDate && e.rank!=null).reduce((m,e)=>Math.max(m,e.rank),0);
+              const rowCount = Math.max(15, maxStoredRank, 15 + (sd.manualExtraRows||0));
+              const historyMap = buildRecentRankHistory(scope, 10);
+              return Array.from({length:rowCount}, (_,i)=>i+1).map(rank=>{
               const rec = entries.find(e=>e.date===bulkDate && e.rank===rank);
               const selectedName = rec ? rec.name : '';
               const orderedRoster = orderRosterForRank(rank, visibleRoster, historyMap);
@@ -1673,6 +1693,7 @@
               </div>`;
             }).join(''); })()}
           </div>
+          <div style="margin-top:10px;"><button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="addManualRankRow">＋ 順位を追加（T超え用）</button></div>
           <div style="margin-top:12px;"><button class="mi-btn mi-btn-gold" data-action="bulkRegisterRanked">まとめて登録</button></div>
         ` : `
           <div>
@@ -1980,6 +2001,7 @@
     if(action==='manageFilterAll'){ sd.manageFilter = []; render(); return; }
     if(action==='tableSub'){ sd.tableSub = val; render(); return; }
     if(action==='registerMode'){ sd.registerMode = val; render(); return; }
+    if(action==='addManualRankRow'){ sd.manualExtraRows = (sd.manualExtraRows||0) + 1; render(); return; }
 
     if(action==='noop'){ return; }
     if(action==='showHistory'){ state.modal = {scope, name: val}; render(); return; }
@@ -2367,7 +2389,10 @@
       const rankToName = new Map();
       let saved = 0, skippedDup = 0;
       let ownerSync = null;
-      for(let rank=1; rank<=15; rank++){
+      const rankSelects = Array.from(document.querySelectorAll('[data-rank-select]'))
+        .map(el=>parseInt(el.dataset.rankSelect,10))
+        .sort((a,b)=>a-b);
+      for(const rank of rankSelects){
         const sel = document.querySelector(`[data-rank-select="${rank}"]`);
         const scoreInp = document.querySelector(`[data-rank-score="${rank}"]`);
         const name = sel ? sel.value : '';
