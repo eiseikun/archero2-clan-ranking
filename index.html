@@ -280,7 +280,7 @@
 
   let loadedMembers = false, loadedClans = false, loadedSettings = false, loadedPersonal = false;
 
-  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'paste', pasteDate:null, tableSub:'avgRank', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null, manualExtraRows:0}; }
+  function freshScoped(){ return {rankDate:null, trendNames:[], manageFilter:[], manageDateRangeStart:null, manageDateRangeEnd:null, manageSortKey:'date', manageSortDir:'desc', bulkDate: yesterdayStr(), registerMode:'paste', pasteDate:null, tableSub:'avgRank', tableGroup:'avg', tableWeekday:'月', tableRangeStart:null, tableRangeEnd:null, calOpenField:null, calViewMonth:null, graphMode:'weekday', graphMetric:'rank', graphBoss:'月', graphRangeStart:null, graphRangeEnd:null, manualExtraRows:0}; }
 
   const DEFAULT_COLLAPSE_OPEN = {
     clanSettings:false, roster:false, bulkRegister:true,
@@ -1348,14 +1348,25 @@
   }
 
   // ---------- table tab ----------
+  const TABLE_GROUP_SUBS = {avg:['avgRank','avgScore'], best:['bestScore','weekdayBest']};
+
   function renderTableControls(){
     if(state.scope!=='internal') return '';
     const sd = scopedState();
+    const group = sd.tableGroup || 'avg';
     return `
       <div class="mi-subtabs">
-        <div class="mi-subtab ${sd.tableSub==='avgRank'?'active':''}" data-action="tableSub" data-val="avgRank">平均順位</div>
-        <div class="mi-subtab ${sd.tableSub==='avgScore'?'active':''}" data-action="tableSub" data-val="avgScore">平均スコア</div>
-        <div class="mi-subtab ${sd.tableSub==='bestScore'?'active':''}" data-action="tableSub" data-val="bestScore">個人別最高スコア</div>
+        <div class="mi-subtab ${group==='avg'?'active':''}" data-action="tableGroup" data-val="avg">平均</div>
+        <div class="mi-subtab ${group==='best'?'active':''}" data-action="tableGroup" data-val="best">最高</div>
+      </div>
+      <div class="mi-subtabs">
+        ${group==='avg' ? `
+          <div class="mi-subtab ${sd.tableSub==='avgRank'?'active':''}" data-action="tableSub" data-val="avgRank">平均順位</div>
+          <div class="mi-subtab ${sd.tableSub==='avgScore'?'active':''}" data-action="tableSub" data-val="avgScore">平均スコア</div>
+        ` : `
+          <div class="mi-subtab ${sd.tableSub==='bestScore'?'active':''}" data-action="tableSub" data-val="bestScore">個人別最高スコア</div>
+          <div class="mi-subtab ${sd.tableSub==='weekdayBest'?'active':''}" data-action="tableSub" data-val="weekdayBest">曜日別個人最高スコア</div>
+        `}
       </div>`;
   }
   function renderTableContent(){
@@ -1363,6 +1374,7 @@
     const sd = scopedState();
     if(sd.tableSub==='avgRank') return renderAvgRankTable();
     if(sd.tableSub==='avgScore') return renderAvgScoreTable();
+    if(sd.tableSub==='weekdayBest') return renderWeekdayBestScoreTable();
     return renderBestScoreTable();
   }
 
@@ -1526,6 +1538,39 @@
     return `
       <div class="mi-panel">
         <div class="mi-panel-title">🏅 個人別最高スコア</div>
+        <div class="mi-scroll-x">
+        <table class="mi-table">
+          <thead><tr><th>順位</th><th>名前</th><th>最高スコア</th><th>達成日</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        </div>
+      </div>`;
+  }
+
+  function renderWeekdayBestScoreTable(){
+    const scope = 'internal';
+    const sd = scopedState();
+    const weekday = sd.tableWeekday || '月';
+    const entries = getEntries(scope);
+    const roster = scopeRoster(scope); // current roster only — members removed from メンバー管理 shouldn't linger here
+    let rows = roster.map(name=>{
+      const own = entries.filter(e=>e.name===name && e.scoreNum!=null && getWeekday(e.date)===weekday);
+      if(!own.length) return null;
+      const best = own.reduce((a,b)=> b.scoreNum>a.scoreNum?b:a);
+      return {name, best: best.scoreNum, date: best.date, scoreRaw: formatScoreForScope(best.scoreNum, scope)};
+    }).filter(Boolean);
+    rows.sort((a,b)=>b.best-a.best);
+
+    const body = rows.length ? rows.map((r,i)=>`
+      <tr><td>${rankBadge(i+1)}</td><td>${esc(r.name)}</td><td style="font-family:'JetBrains Mono',monospace;">${esc(r.scoreRaw)}</td><td style="font-family:'JetBrains Mono',monospace;">${fmtDateJP(r.date)}</td></tr>
+    `).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:20px 0;">この曜日のスコアデータがありません</td></tr>`;
+
+    return `
+      <div class="mi-panel">
+        <div class="mi-panel-title">🏅 曜日別個人最高スコア（${weekday}：${BOSS_MAP[weekday]}）</div>
+        <div class="mi-pillrow" data-preserve-scroll>${WEEKDAYS.map(w=>
+          `<div class="mi-pill ${w===weekday?'active':''}" data-action="tableWeekday" data-val="${w}">${w} ${BOSS_MAP[w]}</div>`
+        ).join('')}</div>
         <div class="mi-scroll-x">
         <table class="mi-table">
           <thead><tr><th>順位</th><th>名前</th><th>最高スコア</th><th>達成日</th></tr></thead>
@@ -2000,6 +2045,12 @@
     }
     if(action==='manageFilterAll'){ sd.manageFilter = []; render(); return; }
     if(action==='tableSub'){ sd.tableSub = val; render(); return; }
+    if(action==='tableGroup'){
+      sd.tableGroup = val;
+      if(!TABLE_GROUP_SUBS[val].includes(sd.tableSub)) sd.tableSub = TABLE_GROUP_SUBS[val][0];
+      render(); return;
+    }
+    if(action==='tableWeekday'){ sd.tableWeekday = val; render(); return; }
     if(action==='registerMode'){ sd.registerMode = val; render(); return; }
     if(action==='addManualRankRow'){ sd.manualExtraRows = (sd.manualExtraRows||0) + 1; render(); return; }
 
