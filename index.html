@@ -2110,6 +2110,7 @@
       const pw = document.getElementById('mi-personal-pw').value;
       if(pw === personalData.password){
         state.personalLoggedIn = true; state.personalErr = false;
+        state.adminLoggedIn = true; state.adminErr = false;
       } else {
         state.personalErr = true;
       }
