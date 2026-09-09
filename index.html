@@ -1085,7 +1085,6 @@
     if(date){
       const list = getRankedListForDate(scope, date);
       rows = list.map((e,i)=>{
-        if(!isNameVisible(scope, e.name)) return '';
         const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
         const isHome = scope==='cross' && settings.homeClan && e.name===settings.homeClan;
         const scoreDisplay = formatScoreForScope(e.scoreNum, scope);
@@ -1097,7 +1096,7 @@
       }).join('');
 
       const submitted = new Set(list.map(e=>e.name));
-      const missing = roster.filter(m=>!submitted.has(m) && isNameVisible(scope, m));
+      const missing = roster.filter(m=>!submitted.has(m));
       if(missing.length){
         noShowBlock = `<div class="mi-panel" style="margin-top:12px;">
           <div class="mi-panel-title" style="font-size:13px;">😴 未参加（${missing.length}${scope==='internal'?'名':'クラン'}）</div>
@@ -1108,7 +1107,7 @@
 
     const updatedAt = scope==='internal' ? memberUpdatedAt : clanUpdatedAt;
     const timeInfo = date ? `${fmtDateJP(date)} 時点` : '';
-    const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（表示中${getVisibleRoster(scope).length}クラン）`;
+    const panelTitle = scope==='internal' ? '🏆 メンバーランキング' : `🏆 クロスサーバーランキング（全${roster.length}クラン）`;
 
     return `
       ${dates.length ? `<div class="mi-pillrow" id="mi-rank-date-pillrow" data-preserve-scroll>${dates.map(d=>
@@ -1440,7 +1439,7 @@
       };
     });
 
-    const roster = scopeAllKnown(scope);
+    const roster = getVisibleRoster(scope);
     let rows = roster.map(name=>{
       if(!activeDates.length) return null;
       let everRanked = false;
@@ -1487,7 +1486,7 @@
     // otherwise show a misleadingly high "average" based on just one data point.
     const minCount = Math.max(1, Math.ceil(activeDates.length * 0.5));
 
-    const roster = scopeAllKnown(scope);
+    const roster = getVisibleRoster(scope);
     let rows = roster.map(name=>{
       const scores = activeDates
         .map(d=>{
@@ -1522,7 +1521,7 @@
   function renderBestScoreTable(){
     const scope = 'internal';
     const entries = getEntries(scope);
-    const roster = scopeRoster(scope); // current roster only — members removed from メンバー管理 shouldn't linger here
+    const roster = getVisibleRoster(scope); // current roster only, and hidden (unchecked) members are excluded from this table
     let rows = roster.map(name=>{
       const own = entries.filter(e=>e.name===name && e.scoreNum!=null);
       if(!own.length) return null;
@@ -1552,7 +1551,7 @@
     const sd = scopedState();
     const weekday = sd.tableWeekday || '月';
     const entries = getEntries(scope);
-    const roster = scopeRoster(scope); // current roster only — members removed from メンバー管理 shouldn't linger here
+    const roster = getVisibleRoster(scope); // current roster only, and hidden (unchecked) members are excluded from this table
     let rows = roster.map(name=>{
       const own = entries.filter(e=>e.name===name && e.scoreNum!=null && getWeekday(e.date)===weekday);
       if(!own.length) return null;
@@ -1665,7 +1664,7 @@
           </div>
         </div>
         ${roster.length ? `
-        <div class="mi-note" style="margin-top:0;">チェックを外すとランキング・グラフ・表から非表示になります（並び順は↑↓で変更できます）。</div>
+        <div class="mi-note" style="margin-top:0;">チェックを外すとグラフ・表から非表示になります（ランキングには引き続き表示されます。並び順は↑↓で変更できます）。</div>
         <div style="margin:8px 0 12px;">
           <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="selectAllVisible">全${lbl.title}を表示</button>
           <button class="mi-btn mi-btn-ghost mi-btn-sm" data-action="clearAllVisible" style="margin-left:8px;">全て非表示</button>
@@ -2299,11 +2298,19 @@
     }
     if(action==='removeName'){
       const key = scopeRosterKey(scope);
-      if(confirm(`「${val}」を${scopeLabel(scope).panel}から削除しますか？（過去のスコア記録は残ります）`)){
+      const lbl = scopeLabel(scope);
+      const ownEntries = getEntries(scope).filter(e=>e.name===val);
+      const dateList = [...new Set(ownEntries.map(e=>e.date))].sort();
+      let warning = `⚠ 「${val}」を${lbl.panel}から削除します。\n\nこの操作は取り消せません。以下の日付の記録データ（${dateList.length}件）もすべて完全に削除されます：\n\n`;
+      warning += dateList.length ? dateList.map(d=>fmtDateJP(d)).join('\n') : '（記録データはありません）';
+      warning += '\n\n本当によろしいですか？';
+      if(confirm(warning)){
         settings[key] = (settings[key]||[]).filter(m=>m!==val);
         if(scope==='cross' && settings.homeClan===val) settings.homeClan = '';
         await saveSettings();
-        render();
+        setEntries(scope, getEntries(scope).filter(e=>e.name!==val));
+        await persistEntries(scope);
+        showToast(`「${val}」と記録データ${dateList.length}件を削除しました`);
       }
       return;
     }
